@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+
+:root {
+  --bg: #f7f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f1f4;
+  --border: #e3e3e8;
+  --text: #1f2230;
+  --text-muted: #6b6f7f;
+  --accent: #7c3aed;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(124, 58, 237, 0.1);
+  --added-bg: #dbeafe;
+  --added-fg: #1e40af;
+  --removed-bg: #fee2e2;
+  --removed-fg: #991b1b;
+  --modified-bg: #fef3c7;
+  --modified-fg: #92400e;
+  --moved-bg: rgba(124, 58, 237, 0.12);
+  --moved-fg: #6d28d9;
+  --shadow: 0 10px 30px -10px rgba(20, 20, 40, 0.15);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0e0f14;
+  --surface: #171922;
+  --surface-2: #1e212c;
+  --border: #2a2d3a;
+  --text: #e7e8ee;
+  --text-muted: #9296a8;
+  --accent: #a78bfa;
+  --accent-fg: #14151b;
+  --accent-soft: rgba(167, 139, 250, 0.15);
+  --added-bg: rgba(59, 130, 246, 0.22);
+  --added-fg: #93c5fd;
+  --removed-bg: rgba(239, 68, 68, 0.22);
+  --removed-fg: #fca5a5;
+  --modified-bg: rgba(234, 179, 8, 0.22);
+  --modified-fg: #fde68a;
+  --moved-bg: rgba(167, 139, 250, 0.2);
+  --moved-fg: #c4b5fd;
+  --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0e0f14;
+    --surface: #171922;
+    --surface-2: #1e212c;
+    --border: #2a2d3a;
+    --text: #e7e8ee;
+    --text-muted: #9296a8;
+    --accent: #a78bfa;
+    --accent-fg: #14151b;
+    --accent-soft: rgba(167, 139, 250, 0.15);
+    --added-bg: rgba(59, 130, 246, 0.22);
+    --added-fg: #93c5fd;
+    --removed-bg: rgba(239, 68, 68, 0.22);
+    --removed-fg: #fca5a5;
+    --modified-bg: rgba(234, 179, 8, 0.22);
+    --modified-fg: #fde68a;
+    --moved-bg: rgba(167, 139, 250, 0.2);
+    --moved-fg: #c4b5fd;
+    --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+.cm-line-added {
+  background: var(--added-bg) !important;
+  color: var(--added-fg);
+}
+.cm-line-removed {
+  background: var(--removed-bg) !important;
+  color: var(--removed-fg);
+}
+.cm-line-modified {
+  background: var(--modified-bg) !important;
+  color: var(--modified-fg);
+}
+.cm-line-moved {
+  background: var(--moved-bg) !important;
+  color: var(--moved-fg);
+}
+.cm-line-placeholder {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-2),
+    var(--surface-2) 4px,
+    transparent 4px,
+    transparent 8px
+  ) !important;
+}
