@@ -35,7 +35,7 @@ func main() {
 	h := handlers.New(st, cfg)
 
 	router := gin.Default()
-	router.Use(middleware.CORS())
+	router.Use(middleware.CORS(cfg.AllowedOrigin))
 	router.Use(middleware.BodyLimit(cfg.MaxBodyBytes))
 
 	router.GET("/healthz", h.Health)

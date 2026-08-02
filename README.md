@@ -59,8 +59,8 @@ Opens on `localhost:5173`. Compare two JSON payloads side by side, with:
 - No authentication or per-user ownership of shares — anyone with the ID can
   view/export a share.
 - No rate limiting — fine for local/weekend use, not for public deployment.
-- CORS is wide open (`*`) — lock this down to a real frontend origin before
-  deploying anywhere public.
+- CORS defaults to wide open (`*`) via `ALLOWED_ORIGIN` — set it to the real
+  frontend origin in any environment that isn't purely local/dev.
 - Both `left` and `right` must be JSON **objects** at the top level (not bare
   arrays or scalars) — this matches the common case of comparing API
   request/response bodies.

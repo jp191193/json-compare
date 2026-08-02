@@ -2,11 +2,12 @@ package middleware
 
 import "github.com/gin-gonic/gin"
 
-// CORS is left permissive for the MVP since there's no known frontend origin
-// yet. Lock this down to specific origins before any real deployment.
-func CORS() gin.HandlerFunc {
+// CORS restricts cross-origin requests to allowedOrigin. Pass "*" (the
+// MVP-era default) to allow any origin — fine for local/weekend use, but
+// should be set to the real frontend origin before a public deployment.
+func CORS(allowedOrigin string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
