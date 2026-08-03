@@ -41,6 +41,7 @@ func main() {
 	router.GET("/healthz", h.Health)
 
 	v1 := router.Group("/api/v1")
+	v1.Use(middleware.RateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst))
 	{
 		v1.POST("/diff", h.Diff)
 		v1.POST("/shares", h.CreateShare)

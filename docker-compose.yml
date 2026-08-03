@@ -10,6 +10,8 @@ services:
       MAX_SHARE_TTL_HOURS: "720"
       MAX_BODY_BYTES: "2097152"
       ALLOWED_ORIGIN: "*"
+      RATE_LIMIT_RPS: "2"
+      RATE_LIMIT_BURST: "10"
     depends_on:
       redis:
         condition: service_healthy
