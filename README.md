@@ -58,7 +58,11 @@ Opens on `localhost:5173`. Compare two JSON payloads side by side, with:
 
 - No authentication or per-user ownership of shares — anyone with the ID can
   view/export a share.
-- No rate limiting — fine for local/weekend use, not for public deployment.
+- Rate limiting is a per-IP, in-memory token bucket (`RATE_LIMIT_RPS` /
+  `RATE_LIMIT_BURST`, default 2 req/s with a burst of 10) applied to
+  `/api/v1/*` — it resets on restart and isn't shared across replicas, which
+  is fine for a single instance but won't hold up if this ever runs scaled
+  out behind a load balancer.
 - CORS defaults to wide open (`*`) via `ALLOWED_ORIGIN` — set it to the real
   frontend origin in any environment that isn't purely local/dev.
 - Both `left` and `right` must be JSON **objects** at the top level (not bare
@@ -72,6 +76,10 @@ Opens on `localhost:5173`. Compare two JSON payloads side by side, with:
   guarantee for deeply nested or heavily reordered arrays.
 
 ## API
+
+All `/api/v1/*` routes are rate limited per client IP (`/healthz` is not).
+Exceeding the limit returns `429 Too Many Requests` with
+`{"error": "rate limit exceeded, slow down"}`.
 
 ### `GET /healthz`
 

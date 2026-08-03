@@ -8,22 +8,26 @@ import (
 
 // Config holds all runtime configuration, sourced from environment variables.
 type Config struct {
-	Port          string
-	RedisURL      string
-	ShareTTL      time.Duration
-	MaxShareTTL   time.Duration
-	MaxBodyBytes  int64
-	AllowedOrigin string
+	Port           string
+	RedisURL       string
+	ShareTTL       time.Duration
+	MaxShareTTL    time.Duration
+	MaxBodyBytes   int64
+	AllowedOrigin  string
+	RateLimitRPS   float64
+	RateLimitBurst int
 }
 
 func Load() Config {
 	return Config{
-		Port:          getEnv("PORT", "8080"),
-		RedisURL:      getEnv("REDIS_URL", "redis://localhost:6379/0"),
-		ShareTTL:      getEnvHours("SHARE_TTL_HOURS", 168),     // 7 days
-		MaxShareTTL:   getEnvHours("MAX_SHARE_TTL_HOURS", 720), // 30 days
-		MaxBodyBytes:  getEnvInt64("MAX_BODY_BYTES", 2<<20),    // 2MB
-		AllowedOrigin: getEnv("ALLOWED_ORIGIN", "*"),
+		Port:           getEnv("PORT", "8080"),
+		RedisURL:       getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		ShareTTL:       getEnvHours("SHARE_TTL_HOURS", 168),     // 7 days
+		MaxShareTTL:    getEnvHours("MAX_SHARE_TTL_HOURS", 720), // 30 days
+		MaxBodyBytes:   getEnvInt64("MAX_BODY_BYTES", 2<<20),    // 2MB
+		AllowedOrigin:  getEnv("ALLOWED_ORIGIN", "*"),
+		RateLimitRPS:   getEnvFloat("RATE_LIMIT_RPS", 2),
+		RateLimitBurst: int(getEnvInt64("RATE_LIMIT_BURST", 10)),
 	}
 }
 
@@ -46,6 +50,15 @@ func getEnvHours(key string, fallbackHours int) time.Duration {
 func getEnvInt64(key string, fallback int64) int64 {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
+func getEnvFloat(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil {
 			return n
 		}
 	}
