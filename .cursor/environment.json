@@ -1,0 +1,21 @@
+{
+  "name": "JSON Compare",
+  "install": "./.cursor/scripts/install.sh",
+  "start": "./.cursor/scripts/start.sh",
+  "ports": [
+    { "name": "api", "port": 8080 },
+    { "name": "frontend", "port": 5173 }
+  ],
+  "terminals": [
+    {
+      "name": "api",
+      "command": "set -a && source /workspace/.env && set +a && go run ./cmd/server",
+      "description": "Go API server on port 8080"
+    },
+    {
+      "name": "frontend",
+      "command": "cd /workspace/frontend && npm run dev -- --host 0.0.0.0",
+      "description": "Vite dev server on port 5173"
+    }
+  ]
+}
