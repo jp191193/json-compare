@@ -13,7 +13,7 @@ Side-by-side JSON diff for API payloads — ignore noisy keys, get a shareable l
   <img src="docs/assets/compare.gif" alt="Comparing two JSON objects: highlights appear for changed fields, added keys, and ignored timestamps" width="920" />
 </p>
 
-Paste two JSON objects, hit Compare, and see added / removed / changed / moved lines lined up in both panes. Volatile fields like `updatedAt` can be ignored. A share link stores the diff for anyone with the URL.
+Paste two JSON objects, hit Compare, and see added / removed / changed / moved lines lined up in both panes. Diffing runs **in the browser** — payloads are not uploaded. Volatile fields like `updatedAt` can be ignored. A share link encodes both sides in the URL fragment so anyone with the link can reopen the same diff.
 
 <p align="center">
   <img src="docs/assets/screenshot-dark.png" alt="Dark theme side-by-side JSON diff with stats badges" width="920" />
@@ -27,9 +27,10 @@ Paste two JSON objects, hit Compare, and see added / removed / changed / moved l
 
 - **Line-aligned diff** — both editors always show the same number of rows; added or removed keys get placeholder lines so the rest of the payload stays visually locked.
 - **Synced scrolling** — scroll one pane and the other follows by line index, not just pixel offset.
-- **Ignore keys** — comma-separated names, matched at any nesting depth (`updatedAt`, `_id`, `requestId`, …). Ignored keys stay in the editors but are stripped from the comparison and from shares.
-- **Share links** — store a diff in Redis under a short ID (`/share/:id`) with a configurable TTL.
-- **Export** — download a stored share as JSON delta or a human-readable text diff.
+- **Runs in the browser** — Compare does not need the Go API. The Vercel demo works with JSON staying on the device.
+- **Ignore keys** — comma-separated names, matched at any nesting depth (`updatedAt`, `_id`, `requestId`, …). Ignored keys stay in the editors but are excluded from the comparison.
+- **Hash share links** — Copy share link writes both payloads into the URL `#fragment` (gzip-compressed). Nothing is stored on a server. Optional Redis shares (`/share/:id`) still work when the API is running.
+- **Export** — download a stored Redis share as JSON delta or a human-readable text diff.
 - **Dark / light theme** — follows the system, or toggle in the header.
 
 ## Quick start
@@ -38,7 +39,7 @@ Paste two JSON objects, hit Compare, and see added / removed / changed / moved l
 docker compose up --build
 ```
 
-API: `http://localhost:8080` · Redis is started for you.
+API: `http://localhost:8080` · Redis is started for you. The UI can compare and share **without** this — the API is only required for Redis `/share/:id` links.
 
 Frontend (separate terminal):
 
@@ -59,11 +60,11 @@ Without Docker: start Redis, `cp .env.example .env`, then `go run ./cmd/server`.
 | --- | --- |
 | API | Go + [Gin](https://github.com/gin-gonic/gin) |
 | Store | Redis (share TTL, default 7 days) |
-| Diff | [gojsondiff](https://github.com/yudai/gojsondiff) → [jsondiffpatch](https://github.com/benjamine/jsondiffpatch) delta *format* |
+| Diff | Browser: `frontend/src/lib/clientDiff.ts` (same [jsondiffpatch](https://github.com/benjamine/jsondiffpatch) delta *format*). API still uses [gojsondiff](https://github.com/yudai/gojsondiff) for Redis shares. |
 | UI | React + Vite + TypeScript + Tailwind in `frontend/` |
 | Editors | CodeMirror, plus a custom renderer in `frontend/src/lib/lineDiff.ts` |
 
-The frontend does not depend on the `jsondiffpatch` library. It walks the delta shape and builds the side-by-side view itself.
+The frontend does not depend on the `jsondiffpatch` library. It produces that delta shape in `clientDiff.ts` and walks it in `frontend/src/lib/lineDiff.ts` to build the side-by-side view.
 
 ## API
 
@@ -136,6 +137,7 @@ curl -OJ "localhost:8080/api/v1/shares/aB3xQ9kLmZ/export?format=text"
 
 ```bash
 go test ./...
+cd frontend && npm test
 ```
 
 ## Current limits
@@ -144,7 +146,6 @@ go test ./...
 - Rate limit is a per-IP in-memory token bucket (`RATE_LIMIT_RPS` / `RATE_LIMIT_BURST`, default 2 req/s, burst 10). It resets on restart and is not shared across replicas.
 - CORS defaults to `*` via `ALLOWED_ORIGIN` — set the real frontend origin outside local dev.
 - Top-level `left` / `right` must be JSON **objects** (not bare arrays or scalars).
-- No automated frontend tests yet.
 - Array alignment in the side-by-side view is best-effort for deep or heavily reordered arrays.
 
 ## GitHub listing

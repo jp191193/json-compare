@@ -8,4 +8,4 @@ npm install
 npm run dev
 ```
 
-Dev server: `http://localhost:5173` (expects the API at `VITE_API_BASE_URL`, default `http://localhost:8080`).
+Dev server: `http://localhost:5173`. Compare and hash share links run entirely in the browser; `VITE_API_BASE_URL` is only needed for Redis `/share/:id` links (default `http://localhost:8080`).

@@ -18,8 +18,13 @@ function ApiStatusDot() {
     }
   }, [])
 
-  const color = ok === null ? 'bg-gray-400' : ok ? 'bg-green-500' : 'bg-red-500'
-  const label = ok === null ? 'Checking API…' : ok ? 'API online' : 'API unreachable'
+  const color = ok === null ? 'bg-gray-400' : ok ? 'bg-green-500' : 'bg-violet-400'
+  const label =
+    ok === null
+      ? 'Checking API…'
+      : ok
+        ? 'API online'
+        : 'In-browser · JSON stays on this device'
 
   return (
     <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]" title={label}>
