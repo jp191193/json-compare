@@ -1,89 +1,77 @@
-# JSON Compare API
+# JSON Compare
 
-A backend for comparing two JSON payloads, highlighting the differences, and
-generating shareable links to revisit a diff later. Weekend MVP — no auth,
-no rate limiting, and shareable diffs expire automatically via Redis TTL.
+Side-by-side JSON diff for API payloads — ignore noisy keys, get a shareable link.
 
-## Stack
+[![Live demo](https://img.shields.io/badge/demo-json--compare--theta.vercel.app-7c3aed?style=flat-square)](https://json-compare-theta.vercel.app)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![React](https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat-square&logo=react&logoColor=111)](frontend/)
 
-- Go + [Gin](https://github.com/gin-gonic/gin)
-- Redis (shareable diffs are stored with a TTL, default 7 days)
-- Diffing via [gojsondiff](https://github.com/yudai/gojsondiff), which outputs
-  deltas in the [jsondiffpatch](https://github.com/benjamine/jsondiffpatch)
-  delta *format* — the frontend does not depend on the `jsondiffpatch`
-  library itself, it walks that delta shape with its own renderer (see
-  `frontend/src/lib/lineDiff.ts`) to build a line-aligned, side-by-side view.
-- Frontend: React + Vite + TypeScript + Tailwind (in `frontend/`), with
-  CodeMirror for JSON editing/highlighting and `react-router` for the
-  compare/share views.
+**[Open the live app →](https://json-compare-theta.vercel.app)**
 
-## Running locally
+<p align="center">
+  <img src="docs/assets/compare.gif" alt="Comparing two JSON objects: highlights appear for changed fields, added keys, and ignored timestamps" width="920" />
+</p>
+
+Paste two JSON objects, hit Compare, and see added / removed / changed / moved lines lined up in both panes. Volatile fields like `updatedAt` can be ignored. A share link stores the diff for anyone with the URL.
+
+<p align="center">
+  <img src="docs/assets/screenshot-dark.png" alt="Dark theme side-by-side JSON diff with stats badges" width="920" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshot-light.png" alt="Light theme side-by-side JSON diff" width="920" />
+</p>
+
+## Features
+
+- **Line-aligned diff** — both editors always show the same number of rows; added or removed keys get placeholder lines so the rest of the payload stays visually locked.
+- **Synced scrolling** — scroll one pane and the other follows by line index, not just pixel offset.
+- **Ignore keys** — comma-separated names, matched at any nesting depth (`updatedAt`, `_id`, `requestId`, …). Ignored keys stay in the editors but are stripped from the comparison and from shares.
+- **Share links** — store a diff in Redis under a short ID (`/share/:id`) with a configurable TTL.
+- **Export** — download a stored share as JSON delta or a human-readable text diff.
+- **Dark / light theme** — follows the system, or toggle in the header.
+
+## Quick start
 
 ```bash
 docker compose up --build
 ```
 
-This starts the API on `localhost:8080` and a Redis instance. To run without
-Docker, start a local Redis and:
+API: `http://localhost:8080` · Redis is started for you.
 
-```bash
-cp .env.example .env   # adjust as needed
-go run ./cmd/server
-```
-
-### Frontend
+Frontend (separate terminal):
 
 ```bash
 cd frontend
-cp .env.example .env   # points at http://localhost:8080 by default
+cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8080
 npm install
 npm run dev
 ```
 
-Opens on `localhost:5173`. Compare two JSON payloads side by side, with:
+Opens `http://localhost:5173`.
 
-- Line-level highlighting (added/removed/modified/moved), computed client-side
-  from the API's delta so both panes always show the same number of rows —
-  even when keys are added/removed, the shorter side is padded with blank
-  placeholder lines so unrelated content stays visually aligned.
-- Synced scrolling between the two panes (line-index based, not just pixel
-  offset).
-- An "ignore keys" filter (comma-separated key names, any nesting depth) to
-  exclude volatile fields (e.g. `updatedAt`, `_id`) from the comparison and
-  from a created share, without losing them from the editors.
-- One-click copy for either side, and a share link (`/share/:id`) that anyone
-  with the URL can view or export, as long as the backend is reachable.
+Without Docker: start Redis, `cp .env.example .env`, then `go run ./cmd/server`.
 
-## Known gaps (MVP scope)
+## Stack
 
-- No authentication or per-user ownership of shares — anyone with the ID can
-  view/export a share.
-- Rate limiting is a per-IP, in-memory token bucket (`RATE_LIMIT_RPS` /
-  `RATE_LIMIT_BURST`, default 2 req/s with a burst of 10) applied to
-  `/api/v1/*` — it resets on restart and isn't shared across replicas, which
-  is fine for a single instance but won't hold up if this ever runs scaled
-  out behind a load balancer.
-- CORS defaults to wide open (`*`) via `ALLOWED_ORIGIN` — set it to the real
-  frontend origin in any environment that isn't purely local/dev.
-- Both `left` and `right` must be JSON **objects** at the top level (not bare
-  arrays or scalars) — this matches the common case of comparing API
-  request/response bodies.
-- No automated frontend test suite (`frontend/`) — the Go backend has
-  `internal/diff/diff_test.go`, but the frontend has been verified manually
-  (a headless-browser script driven ad hoc), not via a checked-in test runner.
-- Array diffing in the frontend's side-by-side view handles add/remove/modify
-  and simple reorders, but is a best-effort alignment, not a byte-for-byte
-  guarantee for deeply nested or heavily reordered arrays.
+| Layer | Choice |
+| --- | --- |
+| API | Go + [Gin](https://github.com/gin-gonic/gin) |
+| Store | Redis (share TTL, default 7 days) |
+| Diff | [gojsondiff](https://github.com/yudai/gojsondiff) → [jsondiffpatch](https://github.com/benjamine/jsondiffpatch) delta *format* |
+| UI | React + Vite + TypeScript + Tailwind in `frontend/` |
+| Editors | CodeMirror, plus a custom renderer in `frontend/src/lib/lineDiff.ts` |
+
+The frontend does not depend on the `jsondiffpatch` library. It walks the delta shape and builds the side-by-side view itself.
 
 ## API
 
-All `/api/v1/*` routes are rate limited per client IP (`/healthz` is not).
-Exceeding the limit returns `429 Too Many Requests` with
-`{"error": "rate limit exceeded, slow down"}`.
+All `/api/v1/*` routes are rate limited per client IP (`/healthz` is not). Over the limit: `429` with `{"error": "rate limit exceeded, slow down"}`.
 
 ### `GET /healthz`
 
-Health check; pings Redis.
+Pings Redis.
 
 ```bash
 curl localhost:8080/healthz
@@ -91,8 +79,7 @@ curl localhost:8080/healthz
 
 ### `POST /api/v1/diff`
 
-Stateless diff — no persistence. Returns the delta (jsondiffpatch format) and
-summary stats.
+Stateless diff — no persistence. Returns the delta and summary stats.
 
 ```bash
 curl -X POST localhost:8080/api/v1/diff \
@@ -102,8 +89,6 @@ curl -X POST localhost:8080/api/v1/diff \
         "right": {"name": "Alice", "age": 31, "role": "admin"}
       }'
 ```
-
-Response:
 
 ```json
 {
@@ -119,8 +104,7 @@ Response:
 
 ### `POST /api/v1/shares`
 
-Computes the diff once and stores it in Redis under a short ID. Optional
-`ttl_hours` (clamped server-side to `MAX_SHARE_TTL_HOURS`, default 720/30 days).
+Computes the diff once and stores it in Redis. Optional `ttl_hours` (clamped to `MAX_SHARE_TTL_HOURS`, default 720 / 30 days).
 
 ```bash
 curl -X POST localhost:8080/api/v1/shares \
@@ -132,25 +116,17 @@ curl -X POST localhost:8080/api/v1/shares \
       }'
 ```
 
-Response:
-
 ```json
 {"id": "aB3xQ9kLmZ", "url": "/api/v1/shares/aB3xQ9kLmZ", "expiresAt": "2026-08-02T13:00:00Z"}
 ```
 
 ### `GET /api/v1/shares/:id`
 
-Fetches the stored record (`left`, `right`, `delta`, timestamps). 404 if
-missing or expired.
-
-```bash
-curl localhost:8080/api/v1/shares/aB3xQ9kLmZ
-```
+Stored record (`left`, `right`, `delta`, timestamps). `404` if missing or expired.
 
 ### `GET /api/v1/shares/:id/export?format=json|text`
 
-Downloads the diff. `format=json` returns the raw delta; `format=text` returns
-a human-readable ASCII diff.
+`json` = raw delta · `text` = ASCII diff.
 
 ```bash
 curl -OJ "localhost:8080/api/v1/shares/aB3xQ9kLmZ/export?format=text"
@@ -161,3 +137,27 @@ curl -OJ "localhost:8080/api/v1/shares/aB3xQ9kLmZ/export?format=text"
 ```bash
 go test ./...
 ```
+
+## Current limits
+
+- No auth — anyone with a share ID can view or export it.
+- Rate limit is a per-IP in-memory token bucket (`RATE_LIMIT_RPS` / `RATE_LIMIT_BURST`, default 2 req/s, burst 10). It resets on restart and is not shared across replicas.
+- CORS defaults to `*` via `ALLOWED_ORIGIN` — set the real frontend origin outside local dev.
+- Top-level `left` / `right` must be JSON **objects** (not bare arrays or scalars).
+- No automated frontend tests yet.
+- Array alignment in the side-by-side view is best-effort for deep or heavily reordered arrays.
+
+## GitHub listing
+
+After merging, set these in the repo **About** panel so GitHub search and link unfurls match the product:
+
+| Field | Value |
+| --- | --- |
+| Description | Side-by-side JSON diff with ignore-keys and shareable links |
+| Website | https://json-compare-theta.vercel.app |
+| Topics | `json`, `json-diff`, `diff`, `go`, `react`, `developer-tools` |
+| Social preview | Upload [`docs/social-preview.png`](docs/social-preview.png) (1280×640) |
+
+## License
+
+[MIT](LICENSE)
