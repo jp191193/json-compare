@@ -14,6 +14,10 @@
     {
       "source": "/share/:id",
       "destination": "/index.html"
+    },
+    {
+      "source": "/guid",
+      "destination": "/index.html"
     }
   ]
 }
