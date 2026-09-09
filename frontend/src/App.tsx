@@ -1,9 +1,10 @@
-import { Link, Route, Routes } from 'react-router-dom'
+import { Link, NavLink, Route, Routes } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useTheme } from './lib/useTheme'
 import { getHealth } from './lib/api'
 import { ComparePage } from './pages/ComparePage'
 import { SharePage } from './pages/SharePage'
+import { GuidPage } from './pages/GuidPage'
 
 function ApiStatusDot() {
   const [ok, setOk] = useState<boolean | null>(null)
@@ -36,10 +37,35 @@ function App() {
     <div className="min-h-screen">
       <header className="border-b border-[var(--border)] bg-[var(--surface)]">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 font-semibold">
-            <span className="text-[var(--accent)]">{'{ }'}</span>
-            JSON Compare
-          </Link>
+          <div className="flex items-center gap-6">
+            <Link to="/" className="flex items-center gap-2 font-semibold">
+              <span className="text-[var(--accent)]">{'{ }'}</span>
+              JSON Compare
+            </Link>
+            <nav className="flex items-center gap-3 text-sm">
+              <NavLink
+                to="/"
+                end
+                className={({ isActive }) =>
+                  isActive
+                    ? 'font-medium text-[var(--accent)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                }
+              >
+                Compare
+              </NavLink>
+              <NavLink
+                to="/guid"
+                className={({ isActive }) =>
+                  isActive
+                    ? 'font-medium text-[var(--accent)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                }
+              >
+                GUID
+              </NavLink>
+            </nav>
+          </div>
           <div className="flex items-center gap-4">
             <ApiStatusDot />
             <button
@@ -56,6 +82,7 @@ function App() {
       <main>
         <Routes>
           <Route path="/" element={<ComparePage theme={theme} />} />
+          <Route path="/guid" element={<GuidPage />} />
           <Route path="/share/:id" element={<SharePage theme={theme} />} />
         </Routes>
       </main>
