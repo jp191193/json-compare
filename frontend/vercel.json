@@ -10,6 +10,10 @@
         }
       ],
       "destination": "/api/og?id=:id"
+    },
+    {
+      "source": "/share/:id",
+      "destination": "/index.html"
     }
   ]
 }
