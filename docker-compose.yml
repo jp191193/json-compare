@@ -10,6 +10,7 @@ services:
       MAX_SHARE_TTL_HOURS: "720"
       MAX_BODY_BYTES: "2097152"
       ALLOWED_ORIGIN: "*"
+      PUBLIC_BASE_URL: ""
       RATE_LIMIT_RPS: "2"
       RATE_LIMIT_BURST: "10"
     depends_on:

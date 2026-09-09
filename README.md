@@ -120,6 +120,16 @@ curl -X POST localhost:8080/api/v1/shares \
 {"id": "aB3xQ9kLmZ", "url": "/api/v1/shares/aB3xQ9kLmZ", "expiresAt": "2026-08-02T13:00:00Z"}
 ```
 
+### `GET /share/:id`
+
+Server-rendered HTML for crawlers and chat unfurls (Slack, Twitter, LinkedIn, …). Title and Open Graph tags come from diff **stats** only (for example `JSON diff — 3 changed, 1 added`). JSON payloads are never included. Share pages send `X-Robots-Tag: noindex, nofollow`.
+
+```bash
+curl -s localhost:8080/share/aB3xQ9kLmZ | head
+```
+
+The React app still lives at the same path on the frontend origin; bots are proxied to this handler.
+
 ### `GET /api/v1/shares/:id`
 
 Stored record (`left`, `right`, `delta`, timestamps). `404` if missing or expired.
@@ -143,6 +153,7 @@ go test ./...
 - No auth — anyone with a share ID can view or export it.
 - Rate limit is a per-IP in-memory token bucket (`RATE_LIMIT_RPS` / `RATE_LIMIT_BURST`, default 2 req/s, burst 10). It resets on restart and is not shared across replicas.
 - CORS defaults to `*` via `ALLOWED_ORIGIN` — set the real frontend origin outside local dev.
+- Set `PUBLIC_BASE_URL` (the public frontend origin, no trailing slash) so `og:url` on share pages matches the URL people paste. The Vercel frontend proxies crawler requests to `GET /share/:id` (configure `API_BASE_URL` or `VITE_API_BASE_URL` on the frontend host).
 - Top-level `left` / `right` must be JSON **objects** (not bare arrays or scalars).
 - No automated frontend tests yet.
 - Array alignment in the side-by-side view is best-effort for deep or heavily reordered arrays.

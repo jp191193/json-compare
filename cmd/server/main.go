@@ -39,6 +39,9 @@ func main() {
 	router.Use(middleware.BodyLimit(cfg.MaxBodyBytes))
 
 	router.GET("/healthz", h.Health)
+	// Crawler/unfurl HTML for /share/:id. Not rate-limited: Slack/Twitter
+	// fetch these URLs, and the page never includes JSON payloads.
+	router.GET("/share/:id", h.ShareOG)
 
 	v1 := router.Group("/api/v1")
 	v1.Use(middleware.RateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst))
