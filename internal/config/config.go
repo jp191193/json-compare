@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -14,6 +15,7 @@ type Config struct {
 	MaxShareTTL    time.Duration
 	MaxBodyBytes   int64
 	AllowedOrigin  string
+	PublicBaseURL  string
 	RateLimitRPS   float64
 	RateLimitBurst int
 }
@@ -26,6 +28,7 @@ func Load() Config {
 		MaxShareTTL:    getEnvHours("MAX_SHARE_TTL_HOURS", 720), // 30 days
 		MaxBodyBytes:   getEnvInt64("MAX_BODY_BYTES", 2<<20),    // 2MB
 		AllowedOrigin:  getEnv("ALLOWED_ORIGIN", "*"),
+		PublicBaseURL:  strings.TrimRight(getEnv("PUBLIC_BASE_URL", ""), "/"),
 		RateLimitRPS:   getEnvFloat("RATE_LIMIT_RPS", 2),
 		RateLimitBurst: int(getEnvInt64("RATE_LIMIT_BURST", 10)),
 	}

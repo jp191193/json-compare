@@ -1,0 +1,15 @@
+{
+  "rewrites": [
+    {
+      "source": "/share/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|facebookexternalhit|facebot|twitterbot|linkedinbot|slackbot|discordbot|whatsapp|telegrambot|iframely|embedly|skypeuripreview|redditbot|applebot|googlebot|bingbot|duckduckbot|preview|unfurl).*"
+        }
+      ],
+      "destination": "/api/og?id=:id"
+    }
+  ]
+}
