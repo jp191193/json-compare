@@ -1,0 +1,55 @@
+{
+  "id": "acct_7f3a91c2",
+  "email": "ada@example.com",
+  "status": "active",
+  "plan": "free",
+  "profile": {
+    "name": "Ada Lovelace",
+    "timezone": "Europe/London",
+    "locale": "en-GB"
+  },
+  "address": {
+    "line1": "12 St James's Square",
+    "city": "London",
+    "postalCode": "SW1Y 4LE",
+    "country": "GB"
+  },
+  "billing": {
+    "currency": "GBP",
+    "taxId": "GB-992-114-76",
+    "invoiceEmail": "billing@example.com"
+  },
+  "orders": [
+    {
+      "id": "ord_1001",
+      "sku": "seat-monthly",
+      "quantity": 3,
+      "amount": 29.0,
+      "status": "paid"
+    },
+    {
+      "id": "ord_1002",
+      "sku": "seat-monthly",
+      "quantity": 3,
+      "amount": 29.0,
+      "status": "paid"
+    },
+    {
+      "id": "ord_1003",
+      "sku": "addon-sso",
+      "quantity": 1,
+      "amount": 15.0,
+      "status": "paid"
+    }
+  ],
+  "featureFlags": {
+    "newCheckout": false,
+    "rateLimit": true,
+    "auditLog": true
+  },
+  "roles": ["member"],
+  "trialEndsAt": "2026-10-01T00:00:00Z",
+  "tags": ["beta", "uk"],
+  "requestId": "req-aaa-111",
+  "updatedAt": "2026-09-01T12:00:00Z"
+}

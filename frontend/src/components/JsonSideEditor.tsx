@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent, type Ref } from 'react'
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
+import type { DiffHunk } from '../lib/diffHunks'
 import type { DiffLine } from '../lib/lineDiff'
 import { readJsonFile, type JsonSide } from '../lib/readJsonFile'
 import { CopyButton } from './CopyButton'
@@ -16,6 +17,7 @@ interface JsonSideEditorProps {
   onError: (message: string | null) => void
   theme: 'light' | 'dark'
   highlightLines?: DiffLine[]
+  currentHunk?: DiffHunk | null
   editorRef: Ref<ReactCodeMirrorRef>
 }
 
@@ -27,6 +29,7 @@ export function JsonSideEditor({
   onError,
   theme,
   highlightLines,
+  currentHunk,
   editorRef,
 }: JsonSideEditorProps) {
   const [dragOver, setDragOver] = useState(false)
@@ -151,6 +154,7 @@ export function JsonSideEditor({
           onChange={onChange}
           theme={theme}
           highlightLines={highlightLines}
+          currentHunk={currentHunk}
         />
         {dragOver && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[var(--accent-soft)] text-sm font-medium text-[var(--accent)]">
