@@ -5,7 +5,7 @@ import type { DiffResult } from '../lib/types'
 import { buildLineDiff, type DiffLine } from '../lib/lineDiff'
 import { parseIgnoreKeys, stripIgnoredKeys, findIgnoredKeysPresent } from '../lib/ignoreKeys'
 import { useSyncedScroll } from '../lib/useSyncedScroll'
-import { JsonEditor } from '../components/JsonEditor'
+import { JsonSideEditor } from '../components/JsonSideEditor'
 import { StatsBadges } from '../components/StatsBadges'
 import { CopyButton } from '../components/CopyButton'
 import { ALICE_EXAMPLE, COMPARE_EXAMPLES, type CompareExample } from '../lib/examples'
@@ -218,36 +218,26 @@ export function ComparePage({ theme }: ComparePageProps) {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-[var(--text-muted)]">Left JSON</label>
-            <CopyButton text={leftCopyText} />
-          </div>
-          <div className="overflow-hidden rounded-lg border border-[var(--border)]">
-            <JsonEditor
-              ref={leftEditorRef}
-              value={left}
-              onChange={handleLeftChange}
-              theme={theme}
-              highlightLines={leftLines}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-[var(--text-muted)]">Right JSON</label>
-            <CopyButton text={rightCopyText} />
-          </div>
-          <div className="overflow-hidden rounded-lg border border-[var(--border)]">
-            <JsonEditor
-              ref={rightEditorRef}
-              value={right}
-              onChange={handleRightChange}
-              theme={theme}
-              highlightLines={rightLines}
-            />
-          </div>
-        </div>
+        <JsonSideEditor
+          side="Left"
+          value={left}
+          copyText={leftCopyText}
+          onChange={handleLeftChange}
+          onError={setError}
+          theme={theme}
+          highlightLines={leftLines}
+          editorRef={leftEditorRef}
+        />
+        <JsonSideEditor
+          side="Right"
+          value={right}
+          copyText={rightCopyText}
+          onChange={handleRightChange}
+          onError={setError}
+          theme={theme}
+          highlightLines={rightLines}
+          editorRef={rightEditorRef}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -336,8 +326,8 @@ export function ComparePage({ theme }: ComparePageProps) {
           <div>
             <dt className="font-medium">Can I compare JSON files?</dt>
             <dd className="mt-1 text-[var(--text-muted)]">
-              Paste each file’s contents into the left and right editors, then click Compare. The
-              tool expects JSON objects.
+              Drop or open a .json file on each side, or paste into the editors, then click Compare.
+              The tool expects JSON objects.
             </dd>
           </div>
           <div>
