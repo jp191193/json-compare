@@ -8,18 +8,7 @@ import { useSyncedScroll } from '../lib/useSyncedScroll'
 import { JsonEditor } from '../components/JsonEditor'
 import { StatsBadges } from '../components/StatsBadges'
 import { CopyButton } from '../components/CopyButton'
-
-const SAMPLE_LEFT = `{
-  "name": "Alice",
-  "age": 30,
-  "active": true
-}`
-
-const SAMPLE_RIGHT = `{
-  "name": "Alice",
-  "age": 31,
-  "role": "admin"
-}`
+import { ALICE_EXAMPLE, COMPARE_EXAMPLES, type CompareExample } from '../lib/examples'
 
 interface ComparePageProps {
   theme: 'light' | 'dark'
@@ -34,8 +23,9 @@ function cleanText(text: string, lines: DiffLine[] | undefined): string {
 }
 
 export function ComparePage({ theme }: ComparePageProps) {
-  const [left, setLeft] = useState(SAMPLE_LEFT)
-  const [right, setRight] = useState(SAMPLE_RIGHT)
+  const [left, setLeft] = useState(ALICE_EXAMPLE.left)
+  const [right, setRight] = useState(ALICE_EXAMPLE.right)
+  const [loadedExample, setLoadedExample] = useState(ALICE_EXAMPLE.id)
   const [leftLines, setLeftLines] = useState<DiffLine[] | undefined>(undefined)
   const [rightLines, setRightLines] = useState<DiffLine[] | undefined>(undefined)
   const [result, setResult] = useState<DiffResult | null>(null)
@@ -55,7 +45,17 @@ export function ComparePage({ theme }: ComparePageProps) {
 
   const leftEditorRef = useRef<ReactCodeMirrorRef>(null)
   const rightEditorRef = useRef<ReactCodeMirrorRef>(null)
+  const loadedExampleRef = useRef(ALICE_EXAMPLE.id)
   useSyncedScroll(leftEditorRef, rightEditorRef, Boolean(leftLines && rightLines))
+
+  function markExampleIfStillMatching(side: 'left' | 'right', value: string) {
+    const example = COMPARE_EXAMPLES.find((e) => e.id === loadedExampleRef.current)
+    if (!example) return
+    const expected = side === 'left' ? example.left : example.right
+    if (value === expected) return
+    loadedExampleRef.current = ''
+    setLoadedExample('')
+  }
 
   const leftCopyText = useMemo(() => cleanText(left, leftLines), [left, leftLines])
   const rightCopyText = useMemo(() => cleanText(right, rightLines), [right, rightLines])
@@ -69,17 +69,30 @@ export function ComparePage({ theme }: ComparePageProps) {
 
   function handleLeftChange(value: string) {
     setLeft(value)
+    markExampleIfStillMatching('left', value)
     if (result) clearDiff()
   }
 
   function handleRightChange(value: string) {
     setRight(value)
+    markExampleIfStillMatching('right', value)
     if (result) clearDiff()
   }
 
   function handleIgnoreKeysChange(value: string) {
     setIgnoreKeysInput(value)
     if (result) clearDiff()
+  }
+
+  function loadExample(example: CompareExample) {
+    loadedExampleRef.current = example.id
+    setLoadedExample(example.id)
+    setLeft(example.left)
+    setRight(example.right)
+    setIgnoreKeysInput(example.ignoreKeys)
+    setError(null)
+    setShare(null)
+    clearDiff()
   }
 
   function parseInputs(): { l: unknown; r: unknown } | null {
@@ -173,6 +186,37 @@ export function ComparePage({ theme }: ComparePageProps) {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+      <div className="flex flex-col gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">JSON Compare</h1>
+          <p className="mt-1 max-w-2xl text-sm text-[var(--text-muted)]">
+            Side-by-side JSON diff for API responses and configs. Ignore volatile keys, then share a
+            link.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-[var(--text-muted)]">Load example</span>
+          {COMPARE_EXAMPLES.map((example) => {
+            const selected = loadedExample === example.id
+            return (
+              <button
+                key={example.id}
+                type="button"
+                onClick={() => loadExample(example)}
+                aria-pressed={selected}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  selected
+                    ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'
+                }`}
+              >
+                {example.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
@@ -283,6 +327,39 @@ export function ComparePage({ theme }: ComparePageProps) {
           <CopyButton text={shareLink()} label="Copy link" />
         </div>
       )}
+
+      <section className="border-t border-[var(--border)] pt-8" aria-labelledby="faq-heading">
+        <h2 id="faq-heading" className="text-lg font-semibold">
+          FAQ
+        </h2>
+        <dl className="mt-4 grid gap-5 text-sm md:grid-cols-3">
+          <div>
+            <dt className="font-medium">Can I compare JSON files?</dt>
+            <dd className="mt-1 text-[var(--text-muted)]">
+              Paste each file’s contents into the left and right editors, then click Compare. The
+              tool expects JSON objects.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">What do ignore keys do?</dt>
+            <dd className="mt-1 text-[var(--text-muted)]">
+              Comma-separated names such as{' '}
+              <code className="rounded bg-[var(--surface-2)] px-1 py-0.5 text-xs">updatedAt</code>,{' '}
+              <code className="rounded bg-[var(--surface-2)] px-1 py-0.5 text-xs">requestId</code>, or{' '}
+              <code className="rounded bg-[var(--surface-2)] px-1 py-0.5 text-xs">_id</code> are
+              matched at any nesting depth and stripped from the comparison and
+              from share links, so timestamps and request IDs do not clutter the diff.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">How long do share links last?</dt>
+            <dd className="mt-1 text-[var(--text-muted)]">
+              You set a TTL in hours when creating a link (default 24 hours, maximum 30 days). After
+              that the share expires and the URL no longer loads.
+            </dd>
+          </div>
+        </dl>
+      </section>
     </div>
   )
 }
