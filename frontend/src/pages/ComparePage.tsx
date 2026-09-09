@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { EditorView } from '@codemirror/view'
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { ApiError, createShare, postDiff } from '../lib/api'
 import type { DiffResult } from '../lib/types'
+import { findDiffHunks, isEditableTarget, type DiffHunk } from '../lib/diffHunks'
 import { buildLineDiff, type DiffLine } from '../lib/lineDiff'
 import { parseIgnoreKeys, stripIgnoredKeys, findIgnoredKeysPresent } from '../lib/ignoreKeys'
 import { useSyncedScroll } from '../lib/useSyncedScroll'
@@ -9,6 +11,19 @@ import { JsonSideEditor } from '../components/JsonSideEditor'
 import { StatsBadges } from '../components/StatsBadges'
 import { CopyButton } from '../components/CopyButton'
 import { ALICE_EXAMPLE, COMPARE_EXAMPLES, type CompareExample } from '../lib/examples'
+
+const NAV_BTN =
+  'rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold transition hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-50'
+
+function scrollEditorToLine(ref: ReactCodeMirrorRef | null, lineIndex: number) {
+  const view = ref?.view
+  if (!view) return
+  const docLine = Math.min(Math.max(lineIndex + 1, 1), view.state.doc.lines)
+  const line = view.state.doc.line(docLine)
+  view.dispatch({
+    effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+  })
+}
 
 interface ComparePageProps {
   theme: 'light' | 'dark'
@@ -43,10 +58,19 @@ export function ComparePage({ theme }: ComparePageProps) {
     localStorage.setItem('ignoreKeys', ignoreKeysInput)
   }, [ignoreKeysInput])
 
+  const [currentHunkIndex, setCurrentHunkIndex] = useState<number | null>(null)
+
   const leftEditorRef = useRef<ReactCodeMirrorRef>(null)
   const rightEditorRef = useRef<ReactCodeMirrorRef>(null)
   const loadedExampleRef = useRef(ALICE_EXAMPLE.id)
   useSyncedScroll(leftEditorRef, rightEditorRef, Boolean(leftLines && rightLines))
+
+  const hunks = useMemo(
+    () => (leftLines && rightLines ? findDiffHunks(leftLines, rightLines) : []),
+    [leftLines, rightLines],
+  )
+  const currentHunk: DiffHunk | null =
+    currentHunkIndex !== null ? (hunks[currentHunkIndex] ?? null) : null
 
   function markExampleIfStillMatching(side: 'left' | 'right', value: string) {
     const example = COMPARE_EXAMPLES.find((e) => e.id === loadedExampleRef.current)
@@ -65,7 +89,59 @@ export function ComparePage({ theme }: ComparePageProps) {
     setLeftLines(undefined)
     setRightLines(undefined)
     setStrippedFound([])
+    setCurrentHunkIndex(null)
   }
+
+  function scrollToHunk(hunk: DiffHunk) {
+    scrollEditorToLine(leftEditorRef.current, hunk.start)
+    scrollEditorToLine(rightEditorRef.current, hunk.start)
+  }
+
+  const goToHunk = useCallback(
+    (index: number) => {
+      if (hunks.length === 0) return
+      const next = ((index % hunks.length) + hunks.length) % hunks.length
+      setCurrentHunkIndex(next)
+      const hunk = hunks[next]
+      requestAnimationFrame(() => scrollToHunk(hunk))
+    },
+    [hunks],
+  )
+
+  const goNextHunk = useCallback(() => {
+    if (hunks.length === 0) return
+    goToHunk(currentHunkIndex === null ? 0 : currentHunkIndex + 1)
+  }, [currentHunkIndex, goToHunk, hunks.length])
+
+  const goPrevHunk = useCallback(() => {
+    if (hunks.length === 0) return
+    goToHunk(currentHunkIndex === null || currentHunkIndex === 0 ? hunks.length - 1 : currentHunkIndex - 1)
+  }, [currentHunkIndex, goToHunk, hunks.length])
+
+  useEffect(() => {
+    if (!leftLines || !rightLines) return
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault()
+        if (e.key === 'ArrowDown') goNextHunk()
+        else goPrevHunk()
+        return
+      }
+      if (e.altKey || e.metaKey || e.ctrlKey) return
+      if (isEditableTarget(e.target)) return
+      if (e.key === 'n' || e.key === 'j') {
+        e.preventDefault()
+        goNextHunk()
+      } else if (e.key === 'p' || e.key === 'k') {
+        e.preventDefault()
+        goPrevHunk()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [goNextHunk, goPrevHunk, leftLines, rightLines])
 
   function handleLeftChange(value: string) {
     setLeft(value)
@@ -138,6 +214,7 @@ export function ComparePage({ theme }: ComparePageProps) {
       setRight(built.right.text)
       setLeftLines(built.left.lines)
       setRightLines(built.right.lines)
+      setCurrentHunkIndex(null)
       setStrippedFound([
         ...new Set([...findIgnoredKeysPresent(parsed.l, ignoreSet), ...findIgnoredKeysPresent(parsed.r, ignoreSet)]),
       ])
@@ -226,6 +303,7 @@ export function ComparePage({ theme }: ComparePageProps) {
           onError={setError}
           theme={theme}
           highlightLines={leftLines}
+          currentHunk={currentHunk}
           editorRef={leftEditorRef}
         />
         <JsonSideEditor
@@ -236,6 +314,7 @@ export function ComparePage({ theme }: ComparePageProps) {
           onError={setError}
           theme={theme}
           highlightLines={rightLines}
+          currentHunk={currentHunk}
           editorRef={rightEditorRef}
         />
       </div>
@@ -279,6 +358,40 @@ export function ComparePage({ theme }: ComparePageProps) {
         >
           {sharing ? 'Creating link…' : 'Create share link'}
         </button>
+
+        {leftLines && rightLines && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={goPrevHunk}
+              disabled={hunks.length === 0}
+              aria-label="Previous change"
+              className={NAV_BTN}
+            >
+              Previous
+            </button>
+            <span
+              className="min-w-[3.25rem] text-center text-xs font-medium tabular-nums text-[var(--text-muted)]"
+              aria-live="polite"
+            >
+              {hunks.length === 0
+                ? '0 / 0'
+                : currentHunkIndex === null
+                  ? `— / ${hunks.length}`
+                  : `${currentHunkIndex + 1} / ${hunks.length}`}
+            </span>
+            <button
+              type="button"
+              onClick={goNextHunk}
+              disabled={hunks.length === 0}
+              aria-label="Next change"
+              className={NAV_BTN}
+            >
+              Next
+            </button>
+            <span className="text-xs text-[var(--text-muted)]">Alt+↓ / Alt+↑</span>
+          </div>
+        )}
 
         {result && (
           <StatsBadges stats={result.stats} />

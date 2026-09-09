@@ -1,5 +1,6 @@
 import { RangeSetBuilder, type Extension } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
+import type { DiffHunk } from './diffHunks'
 import type { DiffLine } from './lineDiff'
 
 const CLASS_BY_STATUS: Partial<Record<DiffLine['status'], string>> = {
@@ -10,11 +11,14 @@ const CLASS_BY_STATUS: Partial<Record<DiffLine['status'], string>> = {
   placeholder: 'cm-line-placeholder',
 }
 
-export function lineHighlightExtension(lines: DiffLine[]): Extension {
+export function lineHighlightExtension(lines: DiffLine[], currentHunk?: DiffHunk | null): Extension {
   const builder = new RangeSetBuilder<Decoration>()
   let offset = 0
-  for (const line of lines) {
-    const className = CLASS_BY_STATUS[line.status]
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const statusClass = CLASS_BY_STATUS[line.status] ?? ''
+    const inHunk = currentHunk && i >= currentHunk.start && i <= currentHunk.end
+    const className = [statusClass, inHunk ? 'cm-line-current-hunk' : ''].filter(Boolean).join(' ')
     if (className) {
       builder.add(offset, offset, Decoration.line({ class: className }))
     }
