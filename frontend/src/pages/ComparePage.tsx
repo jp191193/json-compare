@@ -5,6 +5,7 @@ import { ApiError, createShare, postDiff } from '../lib/api'
 import type { DiffResult } from '../lib/types'
 import { findDiffHunks, isEditableTarget, type DiffHunk } from '../lib/diffHunks'
 import { buildLineDiff, type DiffLine } from '../lib/lineDiff'
+import { useUnchangedCollapse } from '../lib/useUnchangedCollapse'
 import { parseIgnoreKeys, stripIgnoredKeys, findIgnoredKeysPresent } from '../lib/ignoreKeys'
 import { useSyncedScroll } from '../lib/useSyncedScroll'
 import { JsonSideEditor } from '../components/JsonSideEditor'
@@ -64,6 +65,7 @@ export function ComparePage({ theme }: ComparePageProps) {
   const rightEditorRef = useRef<ReactCodeMirrorRef>(null)
   const loadedExampleRef = useRef(ALICE_EXAMPLE.id)
   useSyncedScroll(leftEditorRef, rightEditorRef, Boolean(leftLines && rightLines))
+  const collapse = useUnchangedCollapse(leftLines, rightLines)
 
   const hunks = useMemo(
     () => (leftLines && rightLines ? findDiffHunks(leftLines, rightLines) : []),
@@ -304,6 +306,8 @@ export function ComparePage({ theme }: ComparePageProps) {
           theme={theme}
           highlightLines={leftLines}
           currentHunk={currentHunk}
+          collapsedFolds={collapse.visibleFolds}
+          onExpandFold={collapse.expandFold}
           editorRef={leftEditorRef}
         />
         <JsonSideEditor
@@ -315,6 +319,8 @@ export function ComparePage({ theme }: ComparePageProps) {
           theme={theme}
           highlightLines={rightLines}
           currentHunk={currentHunk}
+          collapsedFolds={collapse.visibleFolds}
+          onExpandFold={collapse.expandFold}
           editorRef={rightEditorRef}
         />
       </div>
@@ -390,6 +396,16 @@ export function ComparePage({ theme }: ComparePageProps) {
               Next
             </button>
             <span className="text-xs text-[var(--text-muted)]">Alt+↓ / Alt+↑</span>
+            {collapse.canCollapse && (
+              <label className="ml-1 flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                <input
+                  type="checkbox"
+                  checked={collapse.enabled}
+                  onChange={(e) => collapse.setEnabled(e.target.checked)}
+                />
+                Collapse unchanged
+              </label>
+            )}
           </div>
         )}
 
@@ -435,7 +451,7 @@ export function ComparePage({ theme }: ComparePageProps) {
         <h2 id="faq-heading" className="text-lg font-semibold">
           FAQ
         </h2>
-        <dl className="mt-4 grid gap-5 text-sm md:grid-cols-3">
+        <dl className="mt-4 grid gap-5 text-sm md:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="font-medium">Can I compare JSON files?</dt>
             <dd className="mt-1 text-[var(--text-muted)]">
@@ -459,6 +475,14 @@ export function ComparePage({ theme }: ComparePageProps) {
             <dd className="mt-1 text-[var(--text-muted)]">
               You set a TTL in hours when creating a link (default 24 hours, maximum 30 days). After
               that the share expires and the URL no longer loads.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">What does collapse unchanged do?</dt>
+            <dd className="mt-1 text-[var(--text-muted)]">
+              After Compare, long stretches of identical lines hide behind a ⋯ marker so the real
+              changes stay on screen. Click the marker to expand a section, or uncheck Collapse
+              unchanged.
             </dd>
           </div>
         </dl>

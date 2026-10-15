@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent, type Ref } from 'react'
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
+import type { UnchangedFold } from '../lib/collapseUnchanged'
 import type { DiffHunk } from '../lib/diffHunks'
 import type { DiffLine } from '../lib/lineDiff'
 import { readJsonFile, type JsonSide } from '../lib/readJsonFile'
@@ -18,6 +19,8 @@ interface JsonSideEditorProps {
   theme: 'light' | 'dark'
   highlightLines?: DiffLine[]
   currentHunk?: DiffHunk | null
+  collapsedFolds?: UnchangedFold[]
+  onExpandFold?: (id: string) => void
   editorRef: Ref<ReactCodeMirrorRef>
 }
 
@@ -30,6 +33,8 @@ export function JsonSideEditor({
   theme,
   highlightLines,
   currentHunk,
+  collapsedFolds,
+  onExpandFold,
   editorRef,
 }: JsonSideEditorProps) {
   const [dragOver, setDragOver] = useState(false)
@@ -155,6 +160,8 @@ export function JsonSideEditor({
           theme={theme}
           highlightLines={highlightLines}
           currentHunk={currentHunk}
+          collapsedFolds={collapsedFolds}
+          onExpandFold={onExpandFold}
         />
         {dragOver && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[var(--accent-soft)] text-sm font-medium text-[var(--accent)]">

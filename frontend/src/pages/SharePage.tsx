@@ -4,6 +4,7 @@ import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { ApiError, exportShareUrl, getShare } from '../lib/api'
 import type { ShareRecord } from '../lib/types'
 import { buildLineDiff } from '../lib/lineDiff'
+import { useUnchangedCollapse } from '../lib/useUnchangedCollapse'
 import { useSyncedScroll } from '../lib/useSyncedScroll'
 import { JsonEditor } from '../components/JsonEditor'
 import { StatsBadges } from '../components/StatsBadges'
@@ -47,6 +48,7 @@ export function SharePage({ theme }: SharePageProps) {
   const leftEditorRef = useRef<ReactCodeMirrorRef>(null)
   const rightEditorRef = useRef<ReactCodeMirrorRef>(null)
   useSyncedScroll(leftEditorRef, rightEditorRef, Boolean(built))
+  const collapse = useUnchangedCollapse(built?.left.lines, built?.right.lines)
 
   const leftCopyText = useMemo(
     () => (built ? built.left.lines.filter((l) => l.status !== 'placeholder').map((l) => l.text).join('\n') : ''),
@@ -82,6 +84,16 @@ export function SharePage({ theme }: SharePageProps) {
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {collapse.canCollapse && (
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-muted)]">
+              <input
+                type="checkbox"
+                checked={collapse.enabled}
+                onChange={(e) => collapse.setEnabled(e.target.checked)}
+              />
+              Collapse unchanged
+            </label>
+          )}
           <StatsBadges stats={record.delta.stats} />
           <CopyButton text={window.location.href} label="Copy link" />
           <a
@@ -118,6 +130,8 @@ export function SharePage({ theme }: SharePageProps) {
               theme={theme}
               readOnly
               highlightLines={built.left.lines}
+              collapsedFolds={collapse.visibleFolds}
+              onExpandFold={collapse.expandFold}
             />
           </div>
         </div>
@@ -133,6 +147,8 @@ export function SharePage({ theme }: SharePageProps) {
               theme={theme}
               readOnly
               highlightLines={built.right.lines}
+              collapsedFolds={collapse.visibleFolds}
+              onExpandFold={collapse.expandFold}
             />
           </div>
         </div>

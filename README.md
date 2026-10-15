@@ -31,6 +31,7 @@ Paste two JSON objects, hit Compare, and see added / removed / changed / moved l
 - **Share links** — store a diff in Redis under a short ID (`/share/:id`) with a configurable TTL.
 - **Export** — download a stored share as JSON delta or a human-readable text diff.
 - **Dark / light theme** — follows the system, or toggle in the header.
+- **Collapse unchanged** — after a compare, long identical stretches hide behind a clickable ⋯ marker so the real changes stay on screen.
 
 ## Quick start
 
