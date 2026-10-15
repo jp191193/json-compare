@@ -92,4 +92,51 @@ export const COMPARE_EXAMPLES: CompareExample[] = [
 }`,
     ignoreKeys: 'updatedAt',
   },
+  {
+    id: 'large-payload',
+    label: 'Large payload',
+    left: `{
+  "id": "acct_01",
+  "region": "us-east-1",
+  "status": "active",
+  "plan": "pro",
+  "seats": 12,
+  "billing": {
+    "currency": "USD",
+    "cycle": "monthly"
+  },
+  "limits": {
+    "api": 10000,
+    "storageGb": 50
+  },
+  "owner": {
+    "name": "Ada",
+    "email": "ada@example.com"
+  },
+  "createdAt": "2025-01-12T08:00:00Z",
+  "notes": "unchanged customer metadata"
+}`,
+    right: `{
+  "id": "acct_01",
+  "region": "us-east-1",
+  "status": "paused",
+  "plan": "pro",
+  "seats": 12,
+  "billing": {
+    "currency": "USD",
+    "cycle": "monthly"
+  },
+  "limits": {
+    "api": 10000,
+    "storageGb": 50
+  },
+  "owner": {
+    "name": "Ada",
+    "email": "ada@example.com"
+  },
+  "createdAt": "2025-01-12T08:00:00Z",
+  "notes": "unchanged customer metadata"
+}`,
+    ignoreKeys: '',
+  },
 ]
