@@ -22,9 +22,24 @@ interface JsonEditorProps {
 }
 
 const baseTheme = EditorView.theme({
-  '&': { fontSize: '13px' },
-  '.cm-content': { fontFamily: 'ui-monospace, SF Mono, Menlo, Consolas, monospace' },
+  '&': {
+    fontSize: '12.5px',
+    backgroundColor: 'var(--editor-bg)',
+    height: '100%',
+  },
+  '.cm-content': {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    caretColor: 'var(--text)',
+  },
   '.cm-scroller': { overflow: 'auto', overflowAnchor: 'none' },
+  '.cm-gutters': {
+    backgroundColor: 'var(--editor-gutter)',
+    color: 'var(--text-muted)',
+    borderRight: '1px solid var(--border)',
+  },
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent' },
+  '&.cm-focused': { outline: 'none' },
 })
 
 export const JsonEditor = forwardRef<ReactCodeMirrorRef, JsonEditorProps>(function JsonEditor(
@@ -58,7 +73,7 @@ export const JsonEditor = forwardRef<ReactCodeMirrorRef, JsonEditorProps>(functi
       theme={theme}
       placeholder={placeholder}
       readOnly={readOnly}
-      height="320px"
+      height="100%"
       extensions={extensions}
       basicSetup={{
         foldGutter: true,
