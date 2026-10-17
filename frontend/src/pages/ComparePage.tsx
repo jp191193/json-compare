@@ -3,18 +3,16 @@ import { EditorView } from '@codemirror/view'
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { ApiError, createShare, postDiff } from '../lib/api'
 import type { DiffResult } from '../lib/types'
-import { findDiffHunks, isEditableTarget, type DiffHunk } from '../lib/diffHunks'
-import { buildLineDiff, type DiffLine } from '../lib/lineDiff'
+import { isEditableTarget, type DiffHunk } from '../lib/diffHunks'
+import { buildLineDiff, countChangeKinds, formatChangeList, type DiffChange, type DiffLine } from '../lib/lineDiff'
 import { useUnchangedCollapse } from '../lib/useUnchangedCollapse'
 import { parseIgnoreKeys, stripIgnoredKeys, findIgnoredKeysPresent } from '../lib/ignoreKeys'
 import { useSyncedScroll } from '../lib/useSyncedScroll'
 import { JsonSideEditor } from '../components/JsonSideEditor'
-import { StatsBadges } from '../components/StatsBadges'
+import { ChangesPanel } from '../components/ChangesPanel'
+import { ResultsBar } from '../components/ResultsBar'
 import { CopyButton } from '../components/CopyButton'
 import { ALICE_EXAMPLE, COMPARE_EXAMPLES, type CompareExample } from '../lib/examples'
-
-const NAV_BTN =
-  'rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold transition hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-50'
 
 function scrollEditorToLine(ref: ReactCodeMirrorRef | null, lineIndex: number) {
   const view = ref?.view
@@ -44,6 +42,9 @@ export function ComparePage({ theme }: ComparePageProps) {
   const [loadedExample, setLoadedExample] = useState(ALICE_EXAMPLE.id)
   const [leftLines, setLeftLines] = useState<DiffLine[] | undefined>(undefined)
   const [rightLines, setRightLines] = useState<DiffLine[] | undefined>(undefined)
+  const [changes, setChanges] = useState<DiffChange[]>([])
+  const [selectedChange, setSelectedChange] = useState<number | null>(null)
+  const [fullscreen, setFullscreen] = useState(false)
   const [result, setResult] = useState<DiffResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -59,20 +60,17 @@ export function ComparePage({ theme }: ComparePageProps) {
     localStorage.setItem('ignoreKeys', ignoreKeysInput)
   }, [ignoreKeysInput])
 
-  const [currentHunkIndex, setCurrentHunkIndex] = useState<number | null>(null)
-
   const leftEditorRef = useRef<ReactCodeMirrorRef>(null)
   const rightEditorRef = useRef<ReactCodeMirrorRef>(null)
   const loadedExampleRef = useRef(ALICE_EXAMPLE.id)
   useSyncedScroll(leftEditorRef, rightEditorRef, Boolean(leftLines && rightLines))
   const collapse = useUnchangedCollapse(leftLines, rightLines)
 
-  const hunks = useMemo(
-    () => (leftLines && rightLines ? findDiffHunks(leftLines, rightLines) : []),
-    [leftLines, rightLines],
-  )
-  const currentHunk: DiffHunk | null =
-    currentHunkIndex !== null ? (hunks[currentHunkIndex] ?? null) : null
+  const currentChange = selectedChange !== null ? (changes[selectedChange] ?? null) : null
+  const currentHunk: DiffHunk | null = currentChange
+    ? { start: currentChange.start, end: currentChange.end }
+    : null
+  const counts = useMemo(() => countChangeKinds(changes), [changes])
 
   function markExampleIfStillMatching(side: 'left' | 'right', value: string) {
     const example = COMPARE_EXAMPLES.find((e) => e.id === loadedExampleRef.current)
@@ -90,35 +88,32 @@ export function ComparePage({ theme }: ComparePageProps) {
     setResult(null)
     setLeftLines(undefined)
     setRightLines(undefined)
+    setChanges([])
     setStrippedFound([])
-    setCurrentHunkIndex(null)
+    setSelectedChange(null)
   }
 
-  function scrollToHunk(hunk: DiffHunk) {
-    scrollEditorToLine(leftEditorRef.current, hunk.start)
-    scrollEditorToLine(rightEditorRef.current, hunk.start)
-  }
+  const selectChange = useCallback((index: number, scroll: boolean) => {
+    if (changes.length === 0) return
+    const next = ((index % changes.length) + changes.length) % changes.length
+    setSelectedChange(next)
+    if (!scroll) return
+    const change = changes[next]
+    requestAnimationFrame(() => {
+      scrollEditorToLine(leftEditorRef.current, change.start)
+      scrollEditorToLine(rightEditorRef.current, change.start)
+    })
+  }, [changes])
 
-  const goToHunk = useCallback(
-    (index: number) => {
-      if (hunks.length === 0) return
-      const next = ((index % hunks.length) + hunks.length) % hunks.length
-      setCurrentHunkIndex(next)
-      const hunk = hunks[next]
-      requestAnimationFrame(() => scrollToHunk(hunk))
-    },
-    [hunks],
-  )
+  const goNextChange = useCallback(() => {
+    if (changes.length === 0) return
+    selectChange(selectedChange === null ? 0 : selectedChange + 1, true)
+  }, [changes.length, selectChange, selectedChange])
 
-  const goNextHunk = useCallback(() => {
-    if (hunks.length === 0) return
-    goToHunk(currentHunkIndex === null ? 0 : currentHunkIndex + 1)
-  }, [currentHunkIndex, goToHunk, hunks.length])
-
-  const goPrevHunk = useCallback(() => {
-    if (hunks.length === 0) return
-    goToHunk(currentHunkIndex === null || currentHunkIndex === 0 ? hunks.length - 1 : currentHunkIndex - 1)
-  }, [currentHunkIndex, goToHunk, hunks.length])
+  const goPrevChange = useCallback(() => {
+    if (changes.length === 0) return
+    selectChange(selectedChange === null || selectedChange === 0 ? changes.length - 1 : selectedChange - 1, true)
+  }, [changes.length, selectChange, selectedChange])
 
   useEffect(() => {
     if (!leftLines || !rightLines) return
@@ -126,24 +121,24 @@ export function ComparePage({ theme }: ComparePageProps) {
     function onKeyDown(e: KeyboardEvent) {
       if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         e.preventDefault()
-        if (e.key === 'ArrowDown') goNextHunk()
-        else goPrevHunk()
+        if (e.key === 'ArrowDown') goNextChange()
+        else goPrevChange()
         return
       }
       if (e.altKey || e.metaKey || e.ctrlKey) return
       if (isEditableTarget(e.target)) return
       if (e.key === 'n' || e.key === 'j') {
         e.preventDefault()
-        goNextHunk()
+        goNextChange()
       } else if (e.key === 'p' || e.key === 'k') {
         e.preventDefault()
-        goPrevHunk()
+        goPrevChange()
       }
     }
 
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [goNextHunk, goPrevHunk, leftLines, rightLines])
+  }, [goNextChange, goPrevChange, leftLines, rightLines])
 
   function handleLeftChange(value: string) {
     setLeft(value)
@@ -216,7 +211,8 @@ export function ComparePage({ theme }: ComparePageProps) {
       setRight(built.right.text)
       setLeftLines(built.left.lines)
       setRightLines(built.right.lines)
-      setCurrentHunkIndex(null)
+      setChanges(built.changes)
+      setSelectedChange(built.changes.length > 0 ? 0 : null)
       setStrippedFound([
         ...new Set([...findIgnoredKeysPresent(parsed.l, ignoreSet), ...findIgnoredKeysPresent(parsed.r, ignoreSet)]),
       ])
@@ -263,18 +259,68 @@ export function ComparePage({ theme }: ComparePageProps) {
     return `${window.location.origin}/share/${share.id}`
   }
 
+  const [copiedChanges, setCopiedChanges] = useState(false)
+
+  function exportDelta() {
+    if (!result) return
+    const blob = new Blob([JSON.stringify(result.delta ?? {}, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'diff.json'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function copyChanges() {
+    await navigator.clipboard.writeText(formatChangeList(changes))
+    setCopiedChanges(true)
+    window.setTimeout(() => setCopiedChanges(false), 1500)
+  }
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-      <div className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">JSON Compare</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--text-muted)]">
-            Side-by-side JSON diff for API responses and configs. Ignore volatile keys, then share a
-            link.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-[var(--text-muted)]">Load example</span>
+    <div className={`flex flex-col gap-3 px-4 py-3 ${fullscreen ? 'fixed inset-0 z-50 overflow-auto bg-[var(--bg)]' : ''}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={handleCompare}
+          disabled={loading}
+          className="rounded-md bg-[var(--select)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {loading ? 'Comparing…' : 'Compare'}
+        </button>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+          Ignore keys
+          <input
+            type="text"
+            placeholder="updatedAt, requestId"
+            value={ignoreKeysInput}
+            onChange={(e) => handleIgnoreKeysChange(e.target.value)}
+            title="Comma-separated key names, matched at any nesting depth"
+            className="w-44 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+          TTL
+          <input
+            type="number"
+            min={1}
+            value={ttlHours}
+            onChange={(e) => setTtlHours(e.target.value)}
+            aria-label="Share TTL in hours"
+            className="w-16 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
+          />
+        </label>
+        {collapse.canCollapse && (
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <input
+              type="checkbox"
+              checked={collapse.enabled}
+              onChange={(e) => collapse.setEnabled(e.target.checked)}
+            />
+            Collapse unchanged
+          </label>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5">
           {COMPARE_EXAMPLES.map((example) => {
             const selected = loadedExample === example.id
             return (
@@ -283,9 +329,9 @@ export function ComparePage({ theme }: ComparePageProps) {
                 type="button"
                 onClick={() => loadExample(example)}
                 aria-pressed={selected}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
                   selected
-                    ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+                    ? 'border-[var(--select)] bg-[color-mix(in_srgb,var(--select)_12%,transparent)] text-[var(--select)]'
                     : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'
                 }`}
               >
@@ -296,7 +342,54 @@ export function ComparePage({ theme }: ComparePageProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <ResultsBar
+        compared={Boolean(result)}
+        total={changes.length}
+        added={counts.added}
+        removed={counts.removed}
+        modified={counts.modified}
+        typeChanged={counts.type}
+        moved={counts.moved}
+        index={selectedChange}
+        onPrev={goPrevChange}
+        onNext={goNextChange}
+        onExport={exportDelta}
+        onCopy={() => void copyChanges()}
+        copyLabel={copiedChanges ? 'Copied' : 'Copy…'}
+        onShare={() => void handleShare()}
+        sharing={sharing}
+        fullscreen={fullscreen}
+        onToggleFullscreen={() => setFullscreen((value) => !value)}
+      />
+
+      {(error || strippedFound.length > 0 || (result && !result.modified) || share) && (
+        <div className="flex flex-col gap-2">
+          {strippedFound.length > 0 && (
+            <div className="text-xs text-[var(--text-muted)]">Stripped from comparison: {strippedFound.join(', ')}</div>
+          )}
+          {error && (
+            <div className="rounded-md border border-[var(--removed-fg)]/30 bg-[var(--card-removed)] px-3 py-2 text-sm text-[var(--removed-fg)]">
+              {error}
+            </div>
+          )}
+          {result && !result.modified && (
+            <div className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 text-center text-sm text-[var(--text-muted)]">
+              No differences — both sides are identical.
+            </div>
+          )}
+          {share && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+              <a href={shareLink()} className="text-sm text-[var(--select)] underline underline-offset-2">
+                {shareLink()}
+              </a>
+              <span className="text-xs text-[var(--text-muted)]">Expires {new Date(share.expiresAt).toLocaleString()}</span>
+              <CopyButton text={shareLink()} label="Copy link" />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 xl:h-[calc(100vh-11.5rem)] xl:min-h-[560px] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_300px]">
         <JsonSideEditor
           side="Left"
           value={left}
@@ -323,131 +416,11 @@ export function ComparePage({ theme }: ComparePageProps) {
           onExpandFold={collapse.expandFold}
           editorRef={rightEditorRef}
         />
+        <ChangesPanel changes={changes} selectedIndex={selectedChange} onSelect={(index) => selectChange(index, true)} />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={handleCompare}
-          disabled={loading}
-          className="rounded-lg bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-[var(--accent-fg)] shadow-sm transition hover:opacity-90 disabled:opacity-50"
-        >
-          {loading ? 'Comparing…' : 'Compare'}
-        </button>
-
-        <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-          <span>Share TTL (hours)</span>
-          <input
-            type="number"
-            min={1}
-            value={ttlHours}
-            onChange={(e) => setTtlHours(e.target.value)}
-            className="w-20 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-          <span>Ignore keys</span>
-          <input
-            type="text"
-            placeholder="updatedAt, requestId, _id"
-            value={ignoreKeysInput}
-            onChange={(e) => handleIgnoreKeysChange(e.target.value)}
-            title="Comma-separated key names, matched at any nesting depth. Matching keys are removed entirely before comparing or sharing — they will not appear in the JSON below after Compare."
-            className="w-56 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm"
-          />
-        </div>
-
-        <button
-          onClick={handleShare}
-          disabled={sharing}
-          className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-5 py-2 text-sm font-semibold transition hover:bg-[var(--surface-2)] disabled:opacity-50"
-        >
-          {sharing ? 'Creating link…' : 'Create share link'}
-        </button>
-
-        {leftLines && rightLines && (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={goPrevHunk}
-              disabled={hunks.length === 0}
-              aria-label="Previous change"
-              className={NAV_BTN}
-            >
-              Previous
-            </button>
-            <span
-              className="min-w-[3.25rem] text-center text-xs font-medium tabular-nums text-[var(--text-muted)]"
-              aria-live="polite"
-            >
-              {hunks.length === 0
-                ? '0 / 0'
-                : currentHunkIndex === null
-                  ? `— / ${hunks.length}`
-                  : `${currentHunkIndex + 1} / ${hunks.length}`}
-            </span>
-            <button
-              type="button"
-              onClick={goNextHunk}
-              disabled={hunks.length === 0}
-              aria-label="Next change"
-              className={NAV_BTN}
-            >
-              Next
-            </button>
-            <span className="text-xs text-[var(--text-muted)]">Alt+↓ / Alt+↑</span>
-            {collapse.canCollapse && (
-              <label className="ml-1 flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                <input
-                  type="checkbox"
-                  checked={collapse.enabled}
-                  onChange={(e) => collapse.setEnabled(e.target.checked)}
-                />
-                Collapse unchanged
-              </label>
-            )}
-          </div>
-        )}
-
-        {result && (
-          <StatsBadges stats={result.stats} />
-        )}
-      </div>
-
-      {strippedFound.length > 0 && (
-        <div className="text-xs text-[var(--text-muted)]">
-          Stripped from comparison: {strippedFound.join(', ')}
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-lg border border-[var(--removed-fg)]/30 bg-[var(--removed-bg)] px-4 py-3 text-sm text-[var(--removed-fg)]">
-          {error}
-        </div>
-      )}
-
-      {result && !result.modified && (
-        <div className="rounded-lg border border-dashed border-[var(--border)] px-4 py-3 text-center text-sm text-[var(--text-muted)]">
-          No differences — both sides are identical.
-        </div>
-      )}
-
-      {share && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-sm">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium">Share link ready</span>
-            <a href={shareLink()} className="text-sm text-[var(--accent)] underline underline-offset-2">
-              {shareLink()}
-            </a>
-            <span className="text-xs text-[var(--text-muted)]">
-              Expires {new Date(share.expiresAt).toLocaleString()}
-            </span>
-          </div>
-          <CopyButton text={shareLink()} label="Copy link" />
-        </div>
-      )}
-
-      <section className="border-t border-[var(--border)] pt-8" aria-labelledby="faq-heading">
+      {!fullscreen && (
+      <section className="border-t border-[var(--border)] pt-6" aria-labelledby="faq-heading">
         <h2 id="faq-heading" className="text-lg font-semibold">
           FAQ
         </h2>
@@ -487,6 +460,7 @@ export function ComparePage({ theme }: ComparePageProps) {
           </div>
         </dl>
       </section>
+      )}
     </div>
   )
 }

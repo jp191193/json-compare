@@ -22,6 +22,7 @@ interface JsonSideEditorProps {
   collapsedFolds?: UnchangedFold[]
   onExpandFold?: (id: string) => void
   editorRef: Ref<ReactCodeMirrorRef>
+  readOnly?: boolean
 }
 
 export function JsonSideEditor({
@@ -36,6 +37,7 @@ export function JsonSideEditor({
   collapsedFolds,
   onExpandFold,
   editorRef,
+  readOnly,
 }: JsonSideEditorProps) {
   const [dragOver, setDragOver] = useState(false)
   const dragDepth = useRef(0)
@@ -104,65 +106,65 @@ export function JsonSideEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-[var(--text-muted)]">{label}</span>
+    <div
+      role="group"
+      aria-label={`${label} editor. Drop a JSON file here.`}
+      onDragEnter={readOnly ? undefined : handleDragEnter}
+      onDragOverCapture={readOnly ? undefined : handleDragOver}
+      onDragLeave={readOnly ? undefined : handleDragLeave}
+      onDropCapture={readOnly ? undefined : handleDrop}
+      className={`flex h-[min(68vh,760px)] min-h-[420px] flex-col overflow-hidden rounded-lg border bg-[var(--editor-bg)] transition xl:h-full xl:min-h-0 ${
+        dragOver ? 'border-[var(--select)] ring-2 ring-[var(--select)]' : 'border-[var(--border)]'
+      }`}
+    >
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+        <span className="text-xs font-semibold tracking-wide text-[var(--text)]">{side}</span>
         <div className="flex items-center gap-1.5">
-          <input
-            ref={fileInputRef}
-            id={fileInputId}
-            type="file"
-            accept=".json,application/json"
-            className="sr-only"
-            aria-label={`Open ${label} file`}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              resetFileInput()
-              if (file) void applyFile(file)
-            }}
-          />
-          <button
-            type="button"
-            className={TOOL_BTN}
-            onClick={() => fileInputRef.current?.click()}
-            aria-controls={fileInputId}
-          >
-            Open file
-          </button>
-          <button
-            type="button"
-            className={TOOL_BTN}
-            onClick={handleFormat}
-            aria-label={`Format ${label}`}
-          >
-            Format
-          </button>
+          {!readOnly && (
+            <>
+              <input
+                ref={fileInputRef}
+                id={fileInputId}
+                type="file"
+                accept=".json,application/json"
+                className="sr-only"
+                aria-label={`Open ${label} file`}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  resetFileInput()
+                  if (file) void applyFile(file)
+                }}
+              />
+              <button
+                type="button"
+                className={TOOL_BTN}
+                onClick={() => fileInputRef.current?.click()}
+                aria-controls={fileInputId}
+              >
+                Open file
+              </button>
+              <button type="button" className={TOOL_BTN} onClick={handleFormat} aria-label={`Format ${label}`}>
+                Format
+              </button>
+            </>
+          )}
           <CopyButton text={copyText} />
         </div>
       </div>
-      <div
-        role="group"
-        aria-label={`${label} editor. Drop a JSON file here.`}
-        onDragEnter={handleDragEnter}
-        onDragOverCapture={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDropCapture={handleDrop}
-        className={`relative overflow-hidden rounded-lg border transition ${
-          dragOver
-            ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]'
-            : 'border-[var(--border)]'
-        }`}
-      >
+      <div className="relative min-h-0 flex-1">
+        <div className="absolute inset-0">
         <JsonEditor
           ref={editorRef}
           value={value}
-          onChange={onChange}
+          onChange={readOnly ? undefined : onChange}
           theme={theme}
+          readOnly={readOnly}
           highlightLines={highlightLines}
           currentHunk={currentHunk}
           collapsedFolds={collapsedFolds}
           onExpandFold={onExpandFold}
         />
+        </div>
         {dragOver && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[var(--accent-soft)] text-sm font-medium text-[var(--accent)]">
             Drop JSON file

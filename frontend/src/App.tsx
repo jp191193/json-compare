@@ -36,9 +36,9 @@ function App() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-6">
-            <Link to="/" className="flex items-center gap-2 font-semibold">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="flex items-center gap-2 whitespace-nowrap font-semibold">
               <span className="text-[var(--accent)]">{'{ }'}</span>
               JSON Compare
             </Link>
@@ -66,7 +66,7 @@ function App() {
               </NavLink>
             </nav>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center gap-3">
             <ApiStatusDot />
             <button
               onClick={toggle}

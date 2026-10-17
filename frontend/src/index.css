@@ -10,14 +10,23 @@
   --accent: #7c3aed;
   --accent-fg: #ffffff;
   --accent-soft: rgba(124, 58, 237, 0.1);
-  --added-bg: #dbeafe;
-  --added-fg: #1e40af;
-  --removed-bg: #fee2e2;
-  --removed-fg: #991b1b;
-  --modified-bg: #fef3c7;
-  --modified-fg: #92400e;
+  --editor-bg: #ffffff;
+  --editor-gutter: #f7f7f9;
+  --added-bg: #dafbe1;
+  --added-fg: #116329;
+  --removed-bg: #ffebe9;
+  --removed-fg: #82071e;
+  --modified-bg: #fff8c5;
+  --modified-fg: #7d4e00;
+  --type-bg: #f3e8ff;
+  --type-fg: #6e40c9;
   --moved-bg: rgba(124, 58, 237, 0.12);
   --moved-fg: #6d28d9;
+  --card-added: #e6f7ea;
+  --card-removed: #ffebe9;
+  --card-modified: #fff8c5;
+  --card-type: #f3e8ff;
+  --select: #0969da;
   --shadow: 0 10px 30px -10px rgba(20, 20, 40, 0.15);
   color-scheme: light;
 }
@@ -32,14 +41,23 @@
   --accent: #a78bfa;
   --accent-fg: #14151b;
   --accent-soft: rgba(167, 139, 250, 0.15);
-  --added-bg: rgba(59, 130, 246, 0.22);
-  --added-fg: #93c5fd;
-  --removed-bg: rgba(239, 68, 68, 0.22);
-  --removed-fg: #fca5a5;
-  --modified-bg: rgba(234, 179, 8, 0.22);
-  --modified-fg: #fde68a;
+  --editor-bg: #16181d;
+  --editor-gutter: #12141a;
+  --added-bg: rgba(46, 160, 67, 0.28);
+  --added-fg: #7ee787;
+  --removed-bg: rgba(248, 81, 73, 0.28);
+  --removed-fg: #ffa198;
+  --modified-bg: rgba(187, 128, 9, 0.32);
+  --modified-fg: #e3b341;
+  --type-bg: rgba(163, 113, 247, 0.32);
+  --type-fg: #d2a8ff;
   --moved-bg: rgba(167, 139, 250, 0.2);
   --moved-fg: #c4b5fd;
+  --card-added: #14301f;
+  --card-removed: #3d1a1e;
+  --card-modified: #3a2c12;
+  --card-type: #2a2144;
+  --select: #4493f8;
   --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
@@ -55,14 +73,23 @@
     --accent: #a78bfa;
     --accent-fg: #14151b;
     --accent-soft: rgba(167, 139, 250, 0.15);
-    --added-bg: rgba(59, 130, 246, 0.22);
-    --added-fg: #93c5fd;
-    --removed-bg: rgba(239, 68, 68, 0.22);
-    --removed-fg: #fca5a5;
-    --modified-bg: rgba(234, 179, 8, 0.22);
-    --modified-fg: #fde68a;
+    --editor-bg: #16181d;
+    --editor-gutter: #12141a;
+    --added-bg: rgba(46, 160, 67, 0.28);
+    --added-fg: #7ee787;
+    --removed-bg: rgba(248, 81, 73, 0.28);
+    --removed-fg: #ffa198;
+    --modified-bg: rgba(187, 128, 9, 0.32);
+    --modified-fg: #e3b341;
+    --type-bg: rgba(163, 113, 247, 0.32);
+    --type-fg: #d2a8ff;
     --moved-bg: rgba(167, 139, 250, 0.2);
     --moved-fg: #c4b5fd;
+    --card-added: #14301f;
+    --card-removed: #3d1a1e;
+    --card-modified: #3a2c12;
+    --card-type: #2a2144;
+    --select: #4493f8;
     --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
@@ -93,6 +120,11 @@ body {
   background: var(--accent-soft);
 }
 
+.cm-editor,
+.cm-scroller {
+  background-color: var(--editor-bg) !important;
+}
+
 .cm-line-added {
   background: var(--added-bg) !important;
   color: var(--added-fg);
@@ -105,9 +137,36 @@ body {
   background: var(--modified-bg) !important;
   color: var(--modified-fg);
 }
+.cm-line-type {
+  background: var(--type-bg) !important;
+  color: var(--type-fg);
+}
 .cm-line-moved {
   background: var(--moved-bg) !important;
   color: var(--moved-fg);
+}
+
+.cm-diff-gutter {
+  width: 1.25rem;
+}
+.cm-diff-mark {
+  display: block;
+  width: 100%;
+  font-weight: 700;
+  text-align: center;
+}
+.cm-diff-mark-added {
+  color: var(--added-fg);
+}
+.cm-diff-mark-removed {
+  color: var(--removed-fg);
+}
+.cm-diff-mark-modified,
+.cm-diff-mark-moved {
+  color: var(--modified-fg);
+}
+.cm-diff-mark-type {
+  color: var(--type-fg);
 }
 .cm-line-placeholder {
   background: repeating-linear-gradient(
@@ -119,18 +178,8 @@ body {
   ) !important;
 }
 
-@keyframes cm-hunk-flash {
-  0% {
-    box-shadow: inset 0 0 0 2px var(--accent);
-  }
-  100% {
-    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-}
-
 .cm-line-current-hunk {
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
-  animation: cm-hunk-flash 0.9s ease-out;
+  box-shadow: inset 3px 0 0 var(--select);
 }
 
 .cm-collapse-unchanged {
