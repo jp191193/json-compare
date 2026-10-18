@@ -1,7 +1,6 @@
-import { RangeSetBuilder, type Extension } from '@codemirror/state'
-import { Decoration, EditorView, WidgetType } from '@codemirror/view'
-import { foldKey, lineRangeOffsets, type UnchangedFold } from './collapseUnchanged'
-import type { DiffLine } from './lineDiff'
+import { RangeSetBuilder, StateField, type EditorState, type Extension } from '@codemirror/state'
+import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
+import { foldKey, type UnchangedFold } from './collapseUnchanged'
 
 class UnchangedCollapseWidget extends WidgetType {
   count: number
@@ -41,26 +40,40 @@ class UnchangedCollapseWidget extends WidgetType {
   }
 }
 
+function foldDecorations(state: EditorState, folds: UnchangedFold[], onExpand: (id: string) => void) {
+  const builder = new RangeSetBuilder<Decoration>()
+  const sorted = [...folds].sort((a, b) => a.start - b.start || a.end - b.end)
+  for (const fold of sorted) {
+    if (fold.start < 0 || fold.end < fold.start || fold.end >= state.doc.lines) continue
+    const from = state.doc.line(fold.start + 1).from
+    const to = fold.end + 1 < state.doc.lines ? state.doc.line(fold.end + 2).from : state.doc.line(fold.end + 1).to
+    if (to <= from) continue
+    builder.add(
+      from,
+      to,
+      Decoration.replace({
+        widget: new UnchangedCollapseWidget(fold.end - fold.start + 1, foldKey(fold), onExpand),
+        block: true,
+      }),
+    )
+  }
+  return builder.finish()
+}
+
 export function collapseUnchangedExtension(
-  lines: DiffLine[],
   folds: UnchangedFold[],
   onExpand: (id: string) => void,
 ): Extension {
   if (folds.length === 0) return []
 
-  const builder = new RangeSetBuilder<Decoration>()
-  for (const fold of folds) {
-    const range = lineRangeOffsets(lines, fold.start, fold.end)
-    if (!range) continue
-    const count = fold.end - fold.start + 1
-    builder.add(
-      range.from,
-      range.to,
-      Decoration.replace({
-        widget: new UnchangedCollapseWidget(count, foldKey(fold), onExpand),
-        block: true,
-      }),
-    )
-  }
-  return EditorView.decorations.of(builder.finish())
+  return StateField.define<DecorationSet>({
+    create(state) {
+      return foldDecorations(state, folds, onExpand)
+    },
+    update(deco, tr) {
+      if (!tr.docChanged) return deco
+      return foldDecorations(tr.state, folds, onExpand)
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  })
 }

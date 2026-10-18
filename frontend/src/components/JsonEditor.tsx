@@ -60,7 +60,7 @@ export const JsonEditor = forwardRef<ReactCodeMirrorRef, JsonEditorProps>(functi
     const ext = [json(), linter(jsonParseLinter()), lintGutter(), baseTheme]
     if (highlightLines) ext.push(lineHighlightExtension(highlightLines, currentHunk))
     if (highlightLines && collapsedFolds?.length && onExpandFold) {
-      ext.push(collapseUnchangedExtension(highlightLines, collapsedFolds, onExpandFold))
+      ext.push(collapseUnchangedExtension(collapsedFolds, onExpandFold))
     }
     return ext
   }, [highlightLines, currentHunk, collapsedFolds, onExpandFold])
