@@ -1,5 +1,5 @@
-import { RangeSetBuilder, type Extension } from '@codemirror/state'
-import { Decoration, EditorView, gutter, GutterMarker } from '@codemirror/view'
+import { RangeSetBuilder, StateField, type Extension } from '@codemirror/state'
+import { Decoration, EditorView, gutter, GutterMarker, type DecorationSet } from '@codemirror/view'
 import type { DiffHunk } from './diffHunks'
 import type { DiffLine } from './lineDiff'
 
@@ -53,18 +53,31 @@ function diffGutter(lines: DiffLine[]): Extension {
   })
 }
 
-export function lineHighlightExtension(lines: DiffLine[], currentHunk?: DiffHunk | null): Extension {
+function lineDecorations(viewDocLines: number, docLineFrom: (lineNo: number) => number, lines: DiffLine[], currentHunk?: DiffHunk | null) {
   const builder = new RangeSetBuilder<Decoration>()
-  let offset = 0
-  for (let i = 0; i < lines.length; i++) {
+  const count = Math.min(lines.length, viewDocLines)
+  for (let i = 0; i < count; i++) {
     const line = lines[i]
     const statusClass = CLASS_BY_STATUS[line.status] ?? ''
     const inHunk = currentHunk && i >= currentHunk.start && i <= currentHunk.end
     const className = [statusClass, inHunk ? 'cm-line-current-hunk' : ''].filter(Boolean).join(' ')
-    if (className) {
-      builder.add(offset, offset, Decoration.line({ class: className }))
-    }
-    offset += line.text.length + 1 // +1 for the joining newline
+    if (!className) continue
+    const pos = docLineFrom(i + 1)
+    builder.add(pos, pos, Decoration.line({ class: className }))
   }
-  return [EditorView.decorations.of(builder.finish()), diffGutter(lines)]
+  return builder.finish()
+}
+
+export function lineHighlightExtension(lines: DiffLine[], currentHunk?: DiffHunk | null): Extension {
+  const field = StateField.define<DecorationSet>({
+    create(state) {
+      return lineDecorations(state.doc.lines, (n) => state.doc.line(n).from, lines, currentHunk)
+    },
+    update(deco, tr) {
+      if (!tr.docChanged) return deco
+      return lineDecorations(tr.state.doc.lines, (n) => tr.state.doc.line(n).from, lines, currentHunk)
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  })
+  return [field, diffGutter(lines)]
 }

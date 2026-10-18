@@ -120,9 +120,25 @@ body {
   background: var(--accent-soft);
 }
 
+.cm-theme-light,
+.cm-theme-dark {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .cm-editor,
 .cm-scroller {
   background-color: var(--editor-bg) !important;
+}
+
+.cm-editor {
+  height: 100% !important;
+  max-height: 100%;
+}
+
+.cm-scroller {
+  overflow: auto !important;
 }
 
 .cm-line-added {
