@@ -13,7 +13,7 @@ import { JsonSideEditor } from '../components/JsonSideEditor'
 import { ChangesPanel } from '../components/ChangesPanel'
 import { ResultsBar } from '../components/ResultsBar'
 import { CopyButton } from '../components/CopyButton'
-import { ALICE_EXAMPLE, COMPARE_EXAMPLES, type CompareExample } from '../lib/examples'
+import { ALICE_EXAMPLE, COMPARE_EXAMPLES, loadHugePayload, type CompareExample } from '../lib/examples'
 
 function scrollEditorToLine(ref: ReactCodeMirrorRef | null, lineIndex: number) {
   const view = ref?.view
@@ -49,6 +49,7 @@ export function ComparePage({ theme }: ComparePageProps) {
   const [result, setResult] = useState<DiffResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingExample, setLoadingExample] = useState<string | null>(null)
 
   const [ttlHours, setTtlHours] = useState('24')
   const [share, setShare] = useState<{ id: string; url: string; expiresAt: string } | null>(null)
@@ -66,14 +67,16 @@ export function ComparePage({ theme }: ComparePageProps) {
   const diffSeq = useRef(0)
   const copying = useRef(false)
   const applyCopyRef = useRef<(index: number, direction: CopyDirection) => void>(() => {})
+  const scrollRestore = useRef<{ left: number; right: number } | null>(null)
   const loadedExampleRef = useRef(ALICE_EXAMPLE.id)
   useSyncedScroll(leftEditorRef, rightEditorRef, Boolean(leftLines && rightLines))
   const collapse = useUnchangedCollapse(leftLines, rightLines)
 
   const currentChange = selectedChange !== null ? (changes[selectedChange] ?? null) : null
-  const currentHunk: DiffHunk | null = currentChange
-    ? { start: currentChange.start, end: currentChange.end }
-    : null
+  const currentHunk = useMemo<DiffHunk | null>(() => {
+    if (!currentChange) return null
+    return { start: currentChange.start, end: currentChange.end }
+  }, [currentChange])
   const counts = useMemo(() => countChangeKinds(changes), [changes])
 
   function markExampleIfStillMatching(side: 'left' | 'right', value: string) {
@@ -84,6 +87,16 @@ export function ComparePage({ theme }: ComparePageProps) {
     loadedExampleRef.current = ''
     setLoadedExample('')
   }
+
+  useEffect(() => {
+    const snap = scrollRestore.current
+    if (!snap) return
+    scrollRestore.current = null
+    const leftScroll = leftEditorRef.current?.view?.scrollDOM
+    const rightScroll = rightEditorRef.current?.view?.scrollDOM
+    if (leftScroll) leftScroll.scrollTop = snap.left
+    if (rightScroll) rightScroll.scrollTop = snap.right
+  }, [left, right])
 
   const leftCopyText = useMemo(() => cleanText(left, leftLines), [left, leftLines])
   const rightCopyText = useMemo(() => cleanText(right, rightLines), [right, rightLines])
@@ -161,15 +174,34 @@ export function ComparePage({ theme }: ComparePageProps) {
     if (result) clearDiff()
   }
 
-  function loadExample(example: CompareExample) {
+  async function loadExample(example: CompareExample) {
     loadedExampleRef.current = example.id
     setLoadedExample(example.id)
-    setLeft(example.left)
-    setRight(example.right)
-    setIgnoreKeysInput(example.ignoreKeys)
     setError(null)
     setShare(null)
     clearDiff()
+
+    let next = example
+    if (example.id === 'huge-payload') {
+      setLoadingExample(example.id)
+      try {
+        next = await loadHugePayload()
+      } catch {
+        if (loadedExampleRef.current === example.id) {
+          loadedExampleRef.current = ''
+          setLoadedExample('')
+          setError('Could not load the huge payload.')
+        }
+        return
+      } finally {
+        setLoadingExample((current) => (current === example.id ? null : current))
+      }
+      if (loadedExampleRef.current !== example.id) return
+    }
+
+    setLeft(next.left)
+    setRight(next.right)
+    setIgnoreKeysInput(next.ignoreKeys)
   }
 
   function parseInputs(): { l: unknown; r: unknown } | null {
@@ -190,7 +222,25 @@ export function ComparePage({ theme }: ComparePageProps) {
     return { l, r }
   }
 
-  async function runCompare(leftText: string, rightText: string) {
+  function nearestChangeIndex(nextChanges: DiffChange[], anchorLine: number) {
+    if (nextChanges.length === 0) return null
+    let best = 0
+    let bestDistance = Math.abs(nextChanges[0].start - anchorLine)
+    for (let i = 1; i < nextChanges.length; i++) {
+      const distance = Math.abs(nextChanges[i].start - anchorLine)
+      if (distance < bestDistance) {
+        best = i
+        bestDistance = distance
+      }
+    }
+    return best
+  }
+
+  async function runCompare(
+    leftText: string,
+    rightText: string,
+    options?: { quiet?: boolean; anchorLine?: number },
+  ) {
     const seq = ++diffSeq.current
     setError(null)
     setShare(null)
@@ -211,7 +261,7 @@ export function ComparePage({ theme }: ComparePageProps) {
     }
 
     const ignoreSet = parseIgnoreKeys(ignoreKeysInput)
-    setLoading(true)
+    if (!options?.quiet) setLoading(true)
     try {
       const res = await postDiff(stripIgnoredKeys(l, ignoreSet), stripIgnoredKeys(r, ignoreSet))
       if (seq !== diffSeq.current) return
@@ -222,13 +272,25 @@ export function ComparePage({ theme }: ComparePageProps) {
       // Since the backend never saw an ignored key, `res.delta` has no entry
       // for it, so it naturally renders as a plain unchanged line here.
       const built = buildLineDiff(l, r, res.delta)
+      if (options?.quiet) {
+        scrollRestore.current = {
+          left: leftEditorRef.current?.view?.scrollDOM.scrollTop ?? 0,
+          right: rightEditorRef.current?.view?.scrollDOM.scrollTop ?? 0,
+        }
+      }
       setResult(res)
       setLeft(built.left.text)
       setRight(built.right.text)
       setLeftLines(built.left.lines)
       setRightLines(built.right.lines)
       setChanges(built.changes)
-      setSelectedChange(built.changes.length > 0 ? 0 : null)
+      setSelectedChange(
+        options?.anchorLine !== undefined
+          ? nearestChangeIndex(built.changes, options.anchorLine)
+          : built.changes.length > 0
+            ? 0
+            : null,
+      )
       setStrippedFound([
         ...new Set([...findIgnoredKeysPresent(l, ignoreSet), ...findIgnoredKeysPresent(r, ignoreSet)]),
       ])
@@ -239,9 +301,9 @@ export function ComparePage({ theme }: ComparePageProps) {
       } else {
         setError('Something went wrong while comparing.')
       }
-      clearDiff()
+      if (!options?.quiet) clearDiff()
     } finally {
-      if (seq === diffSeq.current) setLoading(false)
+      if (!options?.quiet && seq === diffSeq.current) setLoading(false)
     }
   }
 
@@ -268,13 +330,10 @@ export function ComparePage({ theme }: ComparePageProps) {
     const leftText = JSON.stringify(next.left, null, 2)
     const rightText = JSON.stringify(next.right, null, 2)
     copying.current = true
-    setLeft(leftText)
-    setRight(rightText)
     markExampleIfStillMatching('left', leftText)
     markExampleIfStillMatching('right', rightText)
-    clearDiff()
     try {
-      await runCompare(leftText, rightText)
+      await runCompare(leftText, rightText, { quiet: true, anchorLine: change.start })
     } finally {
       copying.current = false
     }
@@ -391,15 +450,16 @@ export function ComparePage({ theme }: ComparePageProps) {
               <button
                 key={example.id}
                 type="button"
-                onClick={() => loadExample(example)}
+                onClick={() => void loadExample(example)}
                 aria-pressed={selected}
-                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                disabled={loadingExample === example.id}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-60 ${
                   selected
                     ? 'border-[var(--select)] bg-[color-mix(in_srgb,var(--select)_12%,transparent)] text-[var(--select)]'
                     : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'
                 }`}
               >
-                {example.label}
+                {loadingExample === example.id ? 'Loading…' : example.label}
               </button>
             )
           })}

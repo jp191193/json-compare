@@ -1,7 +1,8 @@
-import { forwardRef, useMemo } from 'react'
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
 import { linter, lintGutter } from '@codemirror/lint'
+import { Compartment } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import type { UnchangedFold } from '../lib/collapseUnchanged'
 import { collapseUnchangedExtension } from '../lib/collapseUnchangedExtension'
@@ -62,20 +63,41 @@ export const JsonEditor = forwardRef<ReactCodeMirrorRef, JsonEditorProps>(functi
   },
   ref,
 ) {
-  const extensions = useMemo(() => {
-    const ext = [json(), linter(jsonParseLinter()), lintGutter(), baseTheme]
-    if (highlightLines) {
-      const copy =
-        copySide && copyChanges && onCopyChange
-          ? { side: copySide, changes: copyChanges, onCopy: onCopyChange }
-          : null
-      ext.push(lineHighlightExtension(highlightLines, currentHunk, copy))
-    }
-    if (highlightLines && collapsedFolds?.length && onExpandFold) {
-      ext.push(collapseUnchangedExtension(collapsedFolds, onExpandFold))
-    }
-    return ext
-  }, [highlightLines, currentHunk, collapsedFolds, onExpandFold, copySide, copyChanges, onCopyChange])
+  const highlightSlot = useRef(new Compartment())
+  const collapseSlot = useRef(new Compartment())
+  const [view, setView] = useState<EditorView | null>(null)
+
+  const extensions = useMemo(
+    () => [
+      json(),
+      linter(jsonParseLinter()),
+      lintGutter(),
+      baseTheme,
+      highlightSlot.current.of([]),
+      collapseSlot.current.of([]),
+    ],
+    [],
+  )
+
+  useEffect(() => {
+    if (!view) return
+    const copy =
+      highlightLines && copySide && copyChanges && onCopyChange
+        ? { side: copySide, changes: copyChanges, onCopy: onCopyChange }
+        : null
+    view.dispatch({
+      effects: [
+        highlightSlot.current.reconfigure(
+          highlightLines ? lineHighlightExtension(highlightLines, currentHunk, copy) : [],
+        ),
+        collapseSlot.current.reconfigure(
+          highlightLines && collapsedFolds?.length && onExpandFold
+            ? collapseUnchangedExtension(collapsedFolds, onExpandFold)
+            : [],
+        ),
+      ],
+    })
+  }, [view, highlightLines, currentHunk, collapsedFolds, onExpandFold, copySide, copyChanges, onCopyChange])
 
   return (
     <CodeMirror
@@ -87,6 +109,7 @@ export const JsonEditor = forwardRef<ReactCodeMirrorRef, JsonEditorProps>(functi
       readOnly={readOnly}
       height="100%"
       extensions={extensions}
+      onCreateEditor={(editor) => setView(editor)}
       basicSetup={{
         foldGutter: true,
         lintKeymap: true,

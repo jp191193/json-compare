@@ -1,3 +1,5 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -42,9 +44,14 @@ function shareOgDevProxy(): Plugin {
   }
 }
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
 export default defineConfig({
   plugins: [react(), tailwindcss(), shareOgDevProxy()],
   server: {
     port: 5173,
+    fs: {
+      allow: [repoRoot],
+    },
   },
 })

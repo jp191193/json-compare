@@ -7,7 +7,7 @@ export function useUnchangedCollapse(leftLines?: DiffLine[], rightLines?: DiffLi
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
-    setExpanded(new Set())
+    setExpanded((prev) => (prev.size === 0 ? prev : new Set()))
   }, [leftLines, rightLines])
 
   const allFolds = useMemo(() => {
