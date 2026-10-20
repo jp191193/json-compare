@@ -184,6 +184,42 @@ body {
 .cm-diff-mark-type {
   color: var(--type-fg);
 }
+
+.cm-gutters.cm-gutters-after {
+  background-color: var(--editor-gutter);
+  border-left: 1px solid var(--border);
+}
+
+.cm-copy-gutter {
+  width: 1.4rem;
+}
+
+.cm-copy-gutter .cm-gutterElement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cm-copy-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--select);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cm-copy-arrow:hover {
+  background: var(--accent-soft);
+}
 .cm-line-placeholder {
   background: repeating-linear-gradient(
     45deg,
