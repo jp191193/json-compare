@@ -139,4 +139,34 @@ export const COMPARE_EXAMPLES: CompareExample[] = [
 }`,
     ignoreKeys: '',
   },
+  {
+    id: 'huge-payload',
+    label: 'Huge payload',
+    left: '',
+    right: '',
+    ignoreKeys: '',
+  },
 ]
+
+let hugePayloadPromise: Promise<CompareExample> | null = null
+
+/** Loads examples/json-1.json and examples/json-2.json the first time the chip is used. */
+export function loadHugePayload(): Promise<CompareExample> {
+  const example = COMPARE_EXAMPLES.find((item) => item.id === 'huge-payload')
+  if (!example) return Promise.reject(new Error('Huge payload example is missing.'))
+  if (example.left && example.right) return Promise.resolve(example)
+  hugePayloadPromise ??= Promise.all([
+    import('../../../examples/json-1.json?raw'),
+    import('../../../examples/json-2.json?raw'),
+  ])
+    .then(([left, right]) => {
+      example.left = left.default
+      example.right = right.default
+      return example
+    })
+    .catch((error: unknown) => {
+      hugePayloadPromise = null
+      throw error
+    })
+  return hugePayloadPromise
+}
