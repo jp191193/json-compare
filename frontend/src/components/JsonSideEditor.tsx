@@ -2,7 +2,7 @@ import { useRef, useState, type DragEvent, type Ref } from 'react'
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import type { UnchangedFold } from '../lib/collapseUnchanged'
 import type { DiffHunk } from '../lib/diffHunks'
-import type { DiffLine } from '../lib/lineDiff'
+import type { DiffChange, DiffLine } from '../lib/lineDiff'
 import { readJsonFile, type JsonSide } from '../lib/readJsonFile'
 import { CopyButton } from './CopyButton'
 import { JsonEditor } from './JsonEditor'
@@ -21,6 +21,8 @@ interface JsonSideEditorProps {
   currentHunk?: DiffHunk | null
   collapsedFolds?: UnchangedFold[]
   onExpandFold?: (id: string) => void
+  copyChanges?: DiffChange[]
+  onCopyChange?: (changeIndex: number) => void
   editorRef: Ref<ReactCodeMirrorRef>
   readOnly?: boolean
 }
@@ -36,6 +38,8 @@ export function JsonSideEditor({
   currentHunk,
   collapsedFolds,
   onExpandFold,
+  copyChanges,
+  onCopyChange,
   editorRef,
   readOnly,
 }: JsonSideEditorProps) {
@@ -163,6 +167,9 @@ export function JsonSideEditor({
           currentHunk={currentHunk}
           collapsedFolds={collapsedFolds}
           onExpandFold={onExpandFold}
+          copySide={side === 'Left' ? 'left' : 'right'}
+          copyChanges={copyChanges}
+          onCopyChange={readOnly ? undefined : onCopyChange}
         />
         </div>
         {dragOver && (

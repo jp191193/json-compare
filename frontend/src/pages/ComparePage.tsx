@@ -4,6 +4,7 @@ import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { ApiError, createShare, postDiff } from '../lib/api'
 import type { DiffResult } from '../lib/types'
 import { isEditableTarget, type DiffHunk } from '../lib/diffHunks'
+import { copyChange, type CopyDirection } from '../lib/applyChange'
 import { buildLineDiff, countChangeKinds, formatChangeList, type DiffChange, type DiffLine } from '../lib/lineDiff'
 import { useUnchangedCollapse } from '../lib/useUnchangedCollapse'
 import { parseIgnoreKeys, stripIgnoredKeys, findIgnoredKeysPresent } from '../lib/ignoreKeys'
@@ -62,6 +63,9 @@ export function ComparePage({ theme }: ComparePageProps) {
 
   const leftEditorRef = useRef<ReactCodeMirrorRef>(null)
   const rightEditorRef = useRef<ReactCodeMirrorRef>(null)
+  const diffSeq = useRef(0)
+  const copying = useRef(false)
+  const applyCopyRef = useRef<(index: number, direction: CopyDirection) => void>(() => {})
   const loadedExampleRef = useRef(ALICE_EXAMPLE.id)
   useSyncedScroll(leftEditorRef, rightEditorRef, Boolean(leftLines && rightLines))
   const collapse = useUnchangedCollapse(leftLines, rightLines)
@@ -186,26 +190,38 @@ export function ComparePage({ theme }: ComparePageProps) {
     return { l, r }
   }
 
-  async function handleCompare() {
+  async function runCompare(leftText: string, rightText: string) {
+    const seq = ++diffSeq.current
     setError(null)
     setShare(null)
-    const parsed = parseInputs()
-    if (!parsed) return
+
+    let l: unknown
+    let r: unknown
+    try {
+      l = JSON.parse(leftText)
+    } catch {
+      setError('Left JSON is invalid — fix the highlighted error before comparing.')
+      return
+    }
+    try {
+      r = JSON.parse(rightText)
+    } catch {
+      setError('Right JSON is invalid — fix the highlighted error before comparing.')
+      return
+    }
 
     const ignoreSet = parseIgnoreKeys(ignoreKeysInput)
-    const l = stripIgnoredKeys(parsed.l, ignoreSet)
-    const r = stripIgnoredKeys(parsed.r, ignoreSet)
-
     setLoading(true)
     try {
-      const res = await postDiff(l, r)
+      const res = await postDiff(stripIgnoredKeys(l, ignoreSet), stripIgnoredKeys(r, ignoreSet))
+      if (seq !== diffSeq.current) return
       // Build the displayed diff from the full (unstripped) values, not the
       // ignore-filtered ones sent to the backend — otherwise ignored keys are
       // permanently deleted from the editors instead of just excluded from
       // the comparison, and un-ignoring them later has nothing left to show.
       // Since the backend never saw an ignored key, `res.delta` has no entry
       // for it, so it naturally renders as a plain unchanged line here.
-      const built = buildLineDiff(parsed.l, parsed.r, res.delta)
+      const built = buildLineDiff(l, r, res.delta)
       setResult(res)
       setLeft(built.left.text)
       setRight(built.right.text)
@@ -214,9 +230,10 @@ export function ComparePage({ theme }: ComparePageProps) {
       setChanges(built.changes)
       setSelectedChange(built.changes.length > 0 ? 0 : null)
       setStrippedFound([
-        ...new Set([...findIgnoredKeysPresent(parsed.l, ignoreSet), ...findIgnoredKeysPresent(parsed.r, ignoreSet)]),
+        ...new Set([...findIgnoredKeysPresent(l, ignoreSet), ...findIgnoredKeysPresent(r, ignoreSet)]),
       ])
     } catch (e) {
+      if (seq !== diffSeq.current) return
       if (e instanceof ApiError) {
         setError(e.side ? `${e.message} (${e.side} side)` : e.message)
       } else {
@@ -224,9 +241,56 @@ export function ComparePage({ theme }: ComparePageProps) {
       }
       clearDiff()
     } finally {
-      setLoading(false)
+      if (seq === diffSeq.current) setLoading(false)
     }
   }
+
+  async function handleCompare() {
+    await runCompare(left, right)
+  }
+
+  async function applyCopy(index: number, direction: CopyDirection) {
+    if (copying.current) return
+    const change = changes[index]
+    if (!change) return
+
+    let parsedLeft: unknown
+    let parsedRight: unknown
+    try {
+      parsedLeft = JSON.parse(left)
+      parsedRight = JSON.parse(right)
+    } catch {
+      setError('Could not copy this change because the JSON is invalid.')
+      return
+    }
+
+    const next = copyChange(parsedLeft, parsedRight, change, direction)
+    const leftText = JSON.stringify(next.left, null, 2)
+    const rightText = JSON.stringify(next.right, null, 2)
+    copying.current = true
+    setLeft(leftText)
+    setRight(rightText)
+    markExampleIfStillMatching('left', leftText)
+    markExampleIfStillMatching('right', rightText)
+    clearDiff()
+    try {
+      await runCompare(leftText, rightText)
+    } finally {
+      copying.current = false
+    }
+  }
+
+  applyCopyRef.current = (index, direction) => {
+    void applyCopy(index, direction)
+  }
+
+  const copyFromLeft = useCallback((index: number) => {
+    applyCopyRef.current(index, 'to-right')
+  }, [])
+
+  const copyFromRight = useCallback((index: number) => {
+    applyCopyRef.current(index, 'to-left')
+  }, [])
 
   async function handleShare() {
     setError(null)
@@ -401,6 +465,8 @@ export function ComparePage({ theme }: ComparePageProps) {
           currentHunk={currentHunk}
           collapsedFolds={collapse.visibleFolds}
           onExpandFold={collapse.expandFold}
+          copyChanges={changes}
+          onCopyChange={result ? copyFromLeft : undefined}
           editorRef={leftEditorRef}
         />
         <JsonSideEditor
@@ -414,6 +480,8 @@ export function ComparePage({ theme }: ComparePageProps) {
           currentHunk={currentHunk}
           collapsedFolds={collapse.visibleFolds}
           onExpandFold={collapse.expandFold}
+          copyChanges={changes}
+          onCopyChange={result ? copyFromRight : undefined}
           editorRef={rightEditorRef}
         />
         <ChangesPanel changes={changes} selectedIndex={selectedChange} onSelect={(index) => selectChange(index, true)} />
@@ -429,7 +497,8 @@ export function ComparePage({ theme }: ComparePageProps) {
             <dt className="font-medium">Can I compare JSON files?</dt>
             <dd className="mt-1 text-[var(--text-muted)]">
               Drop or open a .json file on each side, or paste into the editors, then click Compare.
-              The tool expects JSON objects.
+              The tool expects JSON objects. After Compare, each change has an arrow: → moves that
+              change onto the right file, and ← moves it onto the left.
             </dd>
           </div>
           <div>

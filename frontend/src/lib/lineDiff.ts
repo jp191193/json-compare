@@ -10,6 +10,16 @@ export interface DiffChange {
   /** Inclusive line index in the rendered side-by-side view. */
   start: number
   end: number
+  /** Whether the parent of this change is a JSON array or object. */
+  container: 'array' | 'object'
+  /** Path segments from the root to the parent container on the left. */
+  leftParent: Array<string | number>
+  /** Path segments from the root to the parent container on the right. */
+  rightParent: Array<string | number>
+  /** Key or index on the left. Absent when the left side does not have this value. */
+  leftKey?: string | number
+  /** Key or index on the right. Absent when the right side does not have this value. */
+  rightKey?: string | number
 }
 
 export interface DiffLine {
@@ -201,6 +211,8 @@ function buildRows(
   rightLines: DiffLine[],
   changes: DiffChange[],
   path: string,
+  leftParent: Array<string | number>,
+  rightParent: Array<string | number>,
 ) {
   const indent = '  '.repeat(depth)
   const childIndent = '  '.repeat(depth + 1)
@@ -209,6 +221,33 @@ function buildRows(
   const rightObj = rightValue as Record<string, unknown>
   const leftArr = leftValue as unknown[]
   const rightArr = rightValue as unknown[]
+  const container: 'array' | 'object' = isArray ? 'array' : 'object'
+
+  function emitChange(
+    kind: ChangeKind,
+    rowPath: string,
+    from: string | undefined,
+    to: string | undefined,
+    start: number,
+    end: number,
+    leftKey?: string | number,
+    rightKey?: string | number,
+  ) {
+    const change: DiffChange = {
+      kind,
+      path: rowPath,
+      start,
+      end,
+      container,
+      leftParent,
+      rightParent,
+    }
+    if (from !== undefined) change.from = from
+    if (to !== undefined) change.to = to
+    if (leftKey !== undefined) change.leftKey = leftKey
+    if (rightKey !== undefined) change.rightKey = rightKey
+    changes.push(change)
+  }
 
   leftLines.push({ text: indent + (isArray ? '[' : '{'), status: 'unchanged' })
   rightLines.push({ text: indent + (isArray ? '[' : '{'), status: 'unchanged' })
@@ -243,24 +282,29 @@ function buildRows(
       const lv = isArray ? leftArr[row.leftKey as number] : leftObj[row.leftKey as string]
       const keyPrefix = isArray ? '' : `${JSON.stringify(String(row.leftKey))}: `
       pushValueLines(leftLines, lv, 'removed', childIndent, keyPrefix, leftComma)
-      changes.push({
-        kind: 'removed',
-        path: rowPath,
-        from: preview(lv),
-        start: leftLenBefore,
-        end: Math.max(leftLines.length, rightLines.length) - 1,
-      })
+      emitChange(
+        'removed',
+        rowPath,
+        preview(lv),
+        undefined,
+        leftLenBefore,
+        Math.max(leftLines.length, rightLines.length) - 1,
+        isArray ? (row.leftKey as number) : (row.leftKey as string),
+      )
     } else if (row.kind === 'rightOnly') {
       const rv = isArray ? rightArr[row.rightKey as number] : rightObj[row.rightKey as string]
       const keyPrefix = isArray ? '' : `${JSON.stringify(String(row.rightKey))}: `
       pushValueLines(rightLines, rv, 'added', childIndent, keyPrefix, rightComma)
-      changes.push({
-        kind: 'added',
-        path: rowPath,
-        to: preview(rv),
-        start: leftLenBefore,
-        end: Math.max(leftLines.length, rightLines.length) - 1,
-      })
+      emitChange(
+        'added',
+        rowPath,
+        undefined,
+        preview(rv),
+        leftLenBefore,
+        Math.max(leftLines.length, rightLines.length) - 1,
+        undefined,
+        isArray ? (row.rightKey as number) : (row.rightKey as string),
+      )
     } else {
       const lv = isArray ? leftArr[row.leftKey as number] : leftObj[row.leftKey as string]
       const rv = isArray ? rightArr[row.rightKey as number] : rightObj[row.rightKey as string]
@@ -270,14 +314,16 @@ function buildRows(
       if (isArray && movedOld.has(row.leftKey as number)) {
         pushValueLines(leftLines, lv, 'moved', childIndent, leftKeyPrefix, leftComma)
         pushValueLines(rightLines, rv, 'moved', childIndent, rightKeyPrefix, rightComma)
-        changes.push({
-          kind: 'moved',
-          path: rowPath,
-          from: preview(lv),
-          to: preview(rv),
-          start: leftLenBefore,
-          end: Math.max(leftLines.length, rightLines.length) - 1,
-        })
+        emitChange(
+          'moved',
+          rowPath,
+          preview(lv),
+          preview(rv),
+          leftLenBefore,
+          Math.max(leftLines.length, rightLines.length) - 1,
+          row.leftKey as number,
+          row.rightKey as number,
+        )
       } else {
         const deltaEntry = delta ? (isArray ? delta[String(row.rightKey)] : delta[row.leftKey as string]) : undefined
 
@@ -295,20 +341,33 @@ function buildRows(
             pushValueLines(rightLines, rv, status, childIndent, rightKeyPrefix, rightComma)
           }
           if (status === 'added' || status === 'removed' || status === 'modified' || status === 'type' || status === 'moved') {
-            changes.push({
-              kind: status,
-              path: rowPath,
-              from: status === 'added' ? undefined : preview(lv),
-              to: status === 'removed' ? undefined : preview(rv),
-              start: leftLenBefore,
-              end: Math.max(leftLines.length, rightLines.length) - 1,
-            })
+            emitChange(
+              status,
+              rowPath,
+              status === 'added' ? undefined : preview(lv),
+              status === 'removed' ? undefined : preview(rv),
+              leftLenBefore,
+              Math.max(leftLines.length, rightLines.length) - 1,
+              isArray ? (row.leftKey as number) : (row.leftKey as string),
+              isArray ? (row.rightKey as number) : (row.rightKey as string),
+            )
           }
         } else {
           const subLeft: DiffLine[] = []
           const subRight: DiffLine[] = []
           const subChanges: DiffChange[] = []
-          buildRows(lv, rv, deltaEntry as Record<string, unknown>, depth + 1, subLeft, subRight, subChanges, rowPath)
+          buildRows(
+            lv,
+            rv,
+            deltaEntry as Record<string, unknown>,
+            depth + 1,
+            subLeft,
+            subRight,
+            subChanges,
+            rowPath,
+            [...leftParent, isArray ? (row.leftKey as number) : (row.leftKey as string)],
+            [...rightParent, isArray ? (row.rightKey as number) : (row.rightKey as string)],
+          )
           subLeft[0] = { ...subLeft[0], text: childIndent + leftKeyPrefix + subLeft[0].text.trimStart() }
           subRight[0] = { ...subRight[0], text: childIndent + rightKeyPrefix + subRight[0].text.trimStart() }
           const lastSubLeft = subLeft.length - 1
@@ -349,7 +408,7 @@ export function buildLineDiff(
   const leftLines: DiffLine[] = []
   const rightLines: DiffLine[] = []
   const changes: DiffChange[] = []
-  buildRows(left, right, delta, 0, leftLines, rightLines, changes, '$')
+  buildRows(left, right, delta, 0, leftLines, rightLines, changes, '$', [], [])
   return {
     left: { text: leftLines.map((l) => l.text).join('\n'), lines: leftLines },
     right: { text: rightLines.map((l) => l.text).join('\n'), lines: rightLines },
